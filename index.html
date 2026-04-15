@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>CHRONICLE</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div id="root">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div id="game-title">CHRONICLE</div>
+    <div id="header-right">
+      <div id="save-dot"></div>
+      <div id="save-time">未保存</div>
+      <button class="hbtn" onclick="manualSave()">保存</button>
+    </div>
+  </div>
+
+  <!-- SPEED + AUTO -->
+  <div id="speed-row">
+    <span id="speed-label">SPEED</span>
+    <button class="spd-btn on" onclick="setSpd(1,this)">×1</button>
+    <button class="spd-btn" onclick="setSpd(2,this)">×2</button>
+    <button class="spd-btn" onclick="setSpd(3,this)">×3</button>
+    <button class="spd-btn" onclick="setSpd(5,this)">×5</button>
+    <button class="spd-btn" onclick="setSpd(10,this)">×10</button>
+    <div id="auto-row">
+      <button class="auto-btn" id="atb-train" onclick="toggleAuto('train')">自Train</button>
+      <button class="auto-btn" id="atb-rest" onclick="toggleAuto('rest')">自Rest</button>
+    </div>
+  </div>
+
+  <!-- TABS -->
+  <div id="tabs">
+    <div class="tab on"  onclick="goTab(this,'main')">⚔ 战斗</div>
+    <div class="tab"     onclick="goTab(this,'equip')">🛡 装备</div>
+    <div class="tab"     onclick="goTab(this,'skills')">📚 技能</div>
+    <div class="tab"     onclick="goTab(this,'tasks')">📅 任务</div>
+    <div class="tab"     onclick="goTab(this,'shop')">🛒 商店</div>
+    <div class="tab"     onclick="goTab(this,'stats')">📊 数据</div>
+  </div>
+
+  <!-- ══ MAIN PAGE ══ -->
+  <div class="page on" id="main-page">
+    <div id="stat-strip">
+      <div class="sc"><div class="sl">GOLD</div>    <div class="sv" style="color:var(--gold)"    id="s-gold">0</div></div>
+      <div class="sc"><div class="sl">LEVEL</div>   <div class="sv" style="color:var(--ice)"     id="s-level">1</div></div>
+      <div class="sc"><div class="sl">STAGE</div>   <div class="sv" style="color:var(--violet2)" id="s-stage">1</div></div>
+      <div class="sc"><div class="sl">ATK</div>     <div class="sv" style="color:var(--ember2)"  id="s-atk">10</div></div>
+      <div class="sc"><div class="sl">SPD</div>     <div class="sv" style="color:var(--jade2)"   id="s-spd">1.0</div></div>
+      <div class="sc"><div class="sl">CRIT%</div>   <div class="sv" style="color:var(--gold2)"   id="s-crit">5%</div></div>
+      <div class="sc"><div class="sl">C.DMG</div>   <div class="sv" style="color:var(--ember)"   id="s-cdmg">200%</div></div>
+      <div class="sc"><div class="sl">EXP</div>     <div class="sv" style="color:var(--jade)"    id="s-exp">0/10</div></div>
+    </div>
+
+    <div id="live-bar">
+      <div class="lc"><div class="ll2">DPS</div>    <div class="lv" style="color:var(--ember2)" id="l-dps">0</div></div>
+      <div class="sep"></div>
+      <div class="lc"><div class="ll2">COMBO</div>  <div class="lv" style="color:var(--gold2)"  id="l-combo">×0</div></div>
+      <div class="sep"></div>
+      <div class="lc"><div class="ll2">STREAK</div> <div class="lv" style="color:var(--jade2)"  id="l-streak">0</div></div>
+      <div class="sep"></div>
+      <div class="lc"><div class="ll2">POWER</div>  <div class="lv" style="color:var(--violet2)" id="l-power">0</div></div>
+      <div id="spec-pill">无专精</div>
+    </div>
+
+    <div id="combat-card">
+      <div id="combat-top">
+        <div id="stage-name">Stage 1</div>
+        <div id="combat-badge">进攻中</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-lr"><span>Enemy HP</span><span id="hp-txt">0 / 0</span></div>
+        <div class="bar-t"><div class="bar-f" id="hp-bar" style="width:100%"></div></div>
+      </div>
+      <div id="shield-bar-row" class="bar-row">
+        <div class="bar-lr"><span>护盾</span><span id="shield-txt">0</span></div>
+        <div class="bar-t"><div class="bar-f" id="shield-bar" style="width:100%;background:linear-gradient(90deg,var(--ice2),#b0e8ff)"></div></div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-lr"><span>Time</span><span id="time-txt">60s</span></div>
+        <div class="bar-t"><div class="bar-f" id="time-bar" style="width:100%"></div></div>
+      </div>
+      <div id="dmg-row">
+        <span>Total: <span id="tdmg">0</span></span>
+        <span id="log-dps" style="color:var(--ember2)"></span>
+      </div>
+    </div>
+
+    <div id="log-wrap" style="flex:1;min-height:120px;">
+      <div id="log-top">
+        <span id="log-title">Combat Log</span>
+        <span id="log-dps-top" style="font-size:.5rem;color:var(--ember2)" id="l-dps-top"></span>
+      </div>
+      <div id="log-body"></div>
+    </div>
+
+    <div id="action-row">
+      <button class="act-btn" id="btn-train" onclick="doTrain()">
+        <span class="icon">💪</span>
+        <span class="name">Train</span>
+        <span class="hint">永久强化属性</span>
+      </button>
+      <button class="act-btn" id="btn-rest" onclick="doRest()">
+        <span class="icon">✨</span>
+        <span class="name">Rest</span>
+        <span class="hint">随机增益恢复</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ══ EQUIP PAGE ══ (new gear upgrade system) -->
+  <div class="page" id="equip-page">
+    <!-- Material stockpile -->
+    <div id="mat-stockpile" style="flex-shrink:0;padding:6px 8px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--bd);"></div>
+    <!-- Gear cards (rendered by JS) -->
+    <div id="gear-list" style="flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+
+  <!-- ══ SKILLS PAGE ══ -->
+  <div class="page" id="skills-page">
+    <div id="skill-scroll"></div>
+  </div>
+
+  <!-- ══ TASKS PAGE ══ -->
+  <div class="page" id="tasks-page">
+    <div id="tasks-scroll"></div>
+  </div>
+
+  <!-- ══ SHOP PAGE ══ -->
+  <div class="page" id="shop-page">
+    <div id="shop-hdr">
+      <div id="shop-title">商店</div>
+      <button id="btn-refresh-shop" onclick="refreshShop()">刷新 · 500金</button>
+    </div>
+    <div id="shop-list"></div>
+  </div>
+
+  <!-- ══ STATS PAGE ══ -->
+  <div class="page" id="stats-page">
+    <div id="stats-scroll">
+
+      <!-- Awakening -->
+      <div id="awaken-section">
+        <div id="awaken-title">🌅 觉醒系统</div>
+        <div id="awaken-req">加载中...</div>
+        <button id="awaken-btn" onclick="confirmAwaken()" disabled>觉醒</button>
+      </div>
+
+      <!-- Specialization -->
+      <div class="panel">
+        <div class="panel-title">专精选择</div>
+        <div id="spec-atk" class="spec-card" onclick="selectSpec('atk')">
+          <div class="spec-title" style="color:var(--ember2)">⚔ 战士 · Warrior</div>
+          <div class="spec-desc">Train ATK效果×2 · 每10关ATK+5%</div>
+          <div class="spec-bonus">激活：Train ATK ×2</div>
+        </div>
+        <div id="spec-crit" class="spec-card" onclick="selectSpec('crit')">
+          <div class="spec-title" style="color:var(--gold2)">🎯 刺客 · Assassin</div>
+          <div class="spec-desc">CritDmg永久+50% · 连续暴击触发连击爆发</div>
+          <div class="spec-bonus">激活：CritDmg +50%</div>
+        </div>
+        <div id="spec-spd" class="spec-card" onclick="selectSpec('spd')">
+          <div class="spec-title" style="color:var(--jade2)">⚡ 疾风 · Striker</div>
+          <div class="spec-desc">Train SPD效果×2 · 攻速上限8.0</div>
+          <div class="spec-bonus">激活：SPD Cap 8.0</div>
+        </div>
+      </div>
+
+      <!-- Full Stats -->
+      <div class="panel">
+        <div class="panel-title">数值详情</div>
+        <div class="data-row"><span class="dk">总ATK</span>             <span class="dv" id="d-atk">10</span></div>
+        <div class="data-row"><span class="dk">基础/装备/天赋</span>    <span class="dv" id="d-atk-b">10/0/0</span></div>
+        <div class="data-row"><span class="dk">攻速 / 上限</span>       <span class="dv" id="d-spd">1.0/5.0</span></div>
+        <div class="data-row"><span class="dk">暴击率 / 暴击伤害</span> <span class="dv" id="d-crit">5%/200%</span></div>
+        <div class="data-row"><span class="dk">战斗时间上限</span>       <span class="dv" id="d-time">60s</span></div>
+        <div class="data-row"><span class="dk">阶段 / 最高阶段</span>   <span class="dv" id="d-stage">1/1</span></div>
+        <div class="data-row"><span class="dk">连胜 / 最高Combo</span>  <span class="dv" id="d-rec">0/0</span></div>
+        <div class="data-row"><span class="dk">总伤害输出</span>         <span class="dv" id="d-dmg">0</span></div>
+        <div class="data-row"><span class="dk">战斗/胜利/Boss</span>    <span class="dv" id="d-fights">0/0/0</span></div>
+        <div class="data-row"><span class="dk">传说/神话装备</span>      <span class="dv" id="d-leg">0/0</span></div>
+        <div class="data-row"><span class="dk">觉醒次数</span>           <span class="dv" id="d-awk">0次</span></div>
+        <div class="data-row"><span class="dk">战力评分</span>           <span class="dv" id="d-power">0</span></div>
+      </div>
+
+      <!-- Talent -->
+      <div class="panel">
+        <div class="panel-title">天赋</div>
+        <div id="talent-card">
+          <div id="t-icon">⚡</div>
+          <div id="t-name">战斗本能</div>
+          <div id="t-desc">每次普攻永久 +1 ATK</div>
+          <div id="t-count">已触发 0 次</div>
+          <div id="rc-cost">费用：<span style="color:var(--gold)" id="rc-txt">1,000 金</span></div>
+          <div id="rc-warn">⚠ 每次 ×3 倍 · 天赋随机</div>
+          <button id="rc-btn" onclick="confirmReroll()">🎲 重置天赋</button>
+        </div>
+        <div id="history-list" style="margin-top:6px;display:flex;flex-direction:column;gap:2px;"></div>
+      </div>
+
+      <!-- Passive Tree -->
+      <div class="panel">
+        <div class="panel-title">被动技能树</div>
+        <div id="passive-scroll-inner"></div>
+      </div>
+
+      <!-- Achievements -->
+      <div class="panel">
+        <div class="panel-title">成就 (<span id="ach-count">0</span>/<span id="ach-total">0</span>)</div>
+        <div id="ach-list"></div>
+      </div>
+
+    </div>
+  </div>
+
+</div><!-- end root -->
+
+<!-- MODAL -->
+<div id="overlay" onclick="if(event.target===this)closeModal()">
+  <div id="modal">
+    <div id="m-title"></div>
+    <div id="m-body"></div>
+    <div id="m-extra"></div>
+    <div id="m-btns"></div>
+  </div>
+</div>
+
+<!-- FX LAYERS -->
+<div id="fx"></div>
+<div id="particles"></div>
+
+<!-- FLASH OVERLAYS -->
+<div class="flash" id="flash-legend"> <div class="ft" id="fl-leg">⭐ 传说装备 ⭐</div></div>
+<div class="flash" id="flash-myth">   <div class="ft" id="fl-myth">🌠 神话装备 🌠</div></div>
+<div class="flash" id="flash-epic">   <div class="ft" id="fl-epic">💜 史诗装备</div></div>
+<div class="flash" id="flash-lvl">    <div class="ft">LEVEL UP!</div></div>
+<div class="flash" id="flash-ms">     <div class="ft" id="fl-ms"></div></div>
+<div class="flash" id="flash-awaken"> <div class="ft">🌅 AWAKENING 🌅</div></div>
+<div id="flash-combo">                <div class="ft" id="fl-combo"></div></div>
+<div id="notifs"></div>
+
+<script src="data.js"></script>
+<script src="game.js"></script>
+<script>
+// ── UI RENDERING (kept in index.html for easy editing) ──────
+
+function goTab(btn, id) {
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
+  btn.classList.add('on');
+  document.getElementById(id+'-page').classList.add('on');
+  if(id==='equip')   renderGear();
+  if(id==='skills')  renderSkills();
+  if(id==='tasks')   renderTasks();
+  if(id==='shop')    renderShop();
+  if(id==='stats')   { updateStats(); renderSpecCards(); renderTalent(); renderPassive(); renderAchs(); renderAwaken(); }
+}
+
+// ── EQUIP RENDER ─────────────────────────────────────────────
+// ── GEAR RENDER (new system) ────────────────────────────────
+function renderGear() {
+  if(!G.gear) return;
+  // Material stockpile
+  const stockpile=$('mat-stockpile');
+  if(stockpile){
+    stockpile.innerHTML='';
+    for(const[key,def] of Object.entries(UPGRADE_MATS)){
+      const amt=G.upgMats[key]||0;
+      const pill=document.createElement('div');
+      pill.style.cssText='display:flex;align-items:center;gap:3px;background:var(--s2);border:1px solid var(--bd2);border-radius:5px;padding:3px 8px;font-size:.58rem;';
+      pill.innerHTML=`${def.icon} <span style="color:${def.color};font-weight:700">${amt}</span> <span style="color:var(--tx3);font-size:.5rem">${def.name}</span>`;
+      stockpile.appendChild(pill);
+    }
+  }
+  // Gear cards
+  const list=$('gear-list'); if(!list) return;
+  list.innerHTML='';
+  for(const slot of SLOTS){
+    const g=G.gear[slot]; if(!g) continue;
+    const paths=GEAR_PATHS[slot];
+    const rarInfo=gearRarity(g.pathLv||0);
+    const card=document.createElement('div');
+    card.style.cssText='background:var(--s1);border:1px solid var(--bd2);border-radius:10px;padding:10px 12px;';
+    // Header
+    const s=`
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="font-size:1.2rem">${SLOT_ICON[slot]}</span>
+          <div>
+            <div class="${RCLS[rarInfo.rar]}" style="font-size:.78rem;font-weight:700">${g.name||SLOT_NAME[slot]}</div>
+            <div style="font-size:.52rem;color:var(--tx3)">${rarInfo.name} · Lv.${g.pathLv||0} · Boss+${g.bossLv||0}</div>
+          </div>
+        </div>
+        <div style="font-size:.6rem;text-align:right;color:var(--tx2)">
+          ${g.totalAtk?'ATK+'+g.totalAtk+'<br>':''}${g.totalSpd?'SPD+'+g.totalSpd+'<br>':''}${g.totalCrit?'Crit+'+g.totalCrit+'%<br>':''}${g.totalCdmg?'CDmg+'+g.totalCdmg+'%':''}
+        </div>
+      </div>`;
+    card.innerHTML=s;
+
+    // Path selection or upgrade
+    if(!g.pathId){
+      // Show path choices
+      const hd=document.createElement('div');
+      hd.style.cssText='font-size:.58rem;color:var(--gold);margin-bottom:6px;';
+      hd.textContent='选择强化路线：';
+      card.appendChild(hd);
+      paths.forEach(path=>{
+        const mat=UPGRADE_MATS[path.mat];
+        const btn=document.createElement('button');
+        btn.style.cssText='width:100%;background:var(--s2);border:1px solid var(--bd2);border-radius:7px;padding:9px 10px;cursor:pointer;text-align:left;margin-bottom:5px;transition:border-color .15s;';
+        btn.innerHTML=`<div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:1.1rem">${path.icon}</span>
+          <div style="flex:1">
+            <div style="font-size:.7rem;font-weight:700;color:var(--tx)">${path.name}</div>
+            <div style="font-size:.56rem;color:var(--tx3);margin-top:2px">${path.desc}</div>
+            <div style="font-size:.52rem;color:${mat.color};margin-top:2px">消耗：${mat.icon} ${mat.name}</div>
+          </div>
+          <div style="color:var(--jade2);font-size:.75rem;font-weight:700">选→</div>
+        </div>`;
+        btn.onmouseenter=()=>btn.style.borderColor='var(--gold)';
+        btn.onmouseleave=()=>btn.style.borderColor='var(--bd2)';
+        btn.onclick=()=>choosePath(slot, path.id);
+        card.appendChild(btn);
+      });
+    } else {
+      // Show upgrade buttons
+      const path=paths.find(p=>p.id===g.pathId);
+      const pathLv=g.pathLv||0;
+      const maxPathLv=path?path.levels.length:50;
+      const mat=path?UPGRADE_MATS[path.mat]:null;
+      const nextLvData=path&&pathLv<maxPathLv?path.levels[pathLv]:null;
+      const matHave=mat?(G.upgMats[path.mat]||0):0;
+      const canUpgrade=nextLvData&&matHave>=nextLvData.cost;
+
+      // Upgrade row
+      const upgradeDiv=document.createElement('div');
+      upgradeDiv.style.cssText='display:flex;gap:5px;margin-bottom:6px;';
+
+      if(nextLvData){
+        const statGain=Object.entries(nextLvData).filter(([k])=>k!=='cost').map(([k,v])=>k.toUpperCase()+'+'+v).join(' ');
+        const upgradeBtn=document.createElement('button');
+        upgradeBtn.style.cssText=`flex:1;padding:9px;border-radius:7px;cursor:${canUpgrade?'pointer':'not-allowed'};border:1px solid;font-family:'JetBrains Mono',monospace;font-size:.6rem;transition:all .15s;background:${canUpgrade?'rgba(58,158,110,.1)':'rgba(100,100,120,.05)'};border-color:${canUpgrade?'var(--jade)':'var(--bd2)'};color:${canUpgrade?'var(--jade2)':'var(--tx3)'};`;
+        upgradeBtn.innerHTML=`<div style="font-weight:700">⬆ 强化 Lv.${pathLv}→${pathLv+1}</div>
+          <div style="font-size:.52rem;margin-top:2px">${mat?mat.icon:''} ${nextLvData.cost} ${mat?mat.name:''} · ${statGain}</div>
+          <div style="font-size:.5rem;margin-top:1px;color:var(--tx3)">拥有：${matHave}</div>`;
+        if(canUpgrade) upgradeBtn.onclick=()=>{ upgradeGear(slot,'path'); renderGear(); };
+        upgradeDiv.appendChild(upgradeBtn);
+
+        const bulkBtn=document.createElement('button');
+        bulkBtn.style.cssText=`padding:9px 8px;border-radius:7px;cursor:${canUpgrade?'pointer':'not-allowed'};border:1px solid;font-family:'JetBrains Mono',monospace;font-size:.58rem;background:${canUpgrade?'rgba(201,168,76,.1)':'rgba(100,100,120,.05)'};border-color:${canUpgrade?'var(--gold)':'var(--bd2)'};color:${canUpgrade?'var(--gold2)':'var(--tx3)'};`;
+        bulkBtn.textContent='全部';
+        if(canUpgrade) bulkBtn.onclick=()=>{ bulkUpgradeGear(slot,'path'); };
+        upgradeDiv.appendChild(bulkBtn);
+      } else {
+        const maxDiv=document.createElement('div');
+        maxDiv.style.cssText='font-size:.6rem;color:var(--gold);padding:8px;text-align:center;';
+        maxDiv.textContent='✅ 路线已满级 ('+maxPathLv+'/'+maxPathLv+')';
+        upgradeDiv.appendChild(maxDiv);
+      }
+      card.appendChild(upgradeDiv);
+
+      // Boss upgrade row
+      const bossLv=g.bossLv||0;
+      const maxBossLv=BOSS_PATH.levels.length;
+      const nextBossData=bossLv<maxBossLv?BOSS_PATH.levels[bossLv]:null;
+      const bossHave=G.upgMats.boss_core||0;
+      const canBoss=nextBossData&&bossHave>=nextBossData.cost;
+      const bossDiv=document.createElement('div');
+      bossDiv.style.cssText='display:flex;gap:5px;';
+      if(nextBossData){
+        const bossBtn=document.createElement('button');
+        bossBtn.style.cssText=`flex:1;padding:8px;border-radius:7px;cursor:${canBoss?'pointer':'not-allowed'};border:1px solid;font-family:'JetBrains Mono',monospace;font-size:.58rem;background:${canBoss?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)'};border-color:${canBoss?'var(--violet)':'var(--bd2)'};color:${canBoss?'var(--violet2)':'var(--tx3)'};`;
+        bossBtn.innerHTML=`💀 Boss强化 Lv.${bossLv}→${bossLv+1} · 核心×${nextBossData.cost} (+${nextBossData.allPct}%全属性) · 拥有:${bossHave}`;
+        if(canBoss) bossBtn.onclick=()=>{ upgradeGear(slot,'boss'); renderGear(); };
+        const bossBulk=document.createElement('button');
+        bossBulk.style.cssText=`padding:8px 7px;border-radius:7px;cursor:${canBoss?'pointer':'not-allowed'};border:1px solid;font-size:.56rem;background:${canBoss?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)'};border-color:${canBoss?'var(--violet)':'var(--bd2)'};color:${canBoss?'var(--violet2)':'var(--tx3)'};`;
+        bossBulk.textContent='全部';
+        if(canBoss) bossBulk.onclick=()=>{ bulkUpgradeGear(slot,'boss'); };
+        bossDiv.appendChild(bossBtn); bossDiv.appendChild(bossBulk);
+      } else {
+        const maxDiv=document.createElement('div'); maxDiv.style.cssText='font-size:.58rem;color:var(--violet2);padding:6px 0;'; maxDiv.textContent='💀 Boss强化已满级'; bossDiv.appendChild(maxDiv);
+      }
+      card.appendChild(bossDiv);
+    }
+    list.appendChild(card);
+  }
+}
+
+// Keep renderEquip as alias for compatibility
+function renderEquip() { renderGear(); }
+
+// ── inventory sort state ──
+let invSort = 'rar';
+let invFilter = 'all';
+
+function renderEquipOld() {
+  // Slots
+  SLOTS.forEach(slot => {
+    const it = G.equipped[slot];
+    const nEl=$('sl-'+slot+'-n'), sEl=$('sl-'+slot+'-s'), lEl=$('sl-'+slot+'-l');
+    if(it) {
+      nEl.className='slot-n '+RCLS[it.rar]; nEl.textContent=it.name;
+      const s=getItemEquipStats(it);
+      const parts=[];
+      if(s.atk)  parts.push('ATK+'+s.atk);
+      if(s.spd)  parts.push('SPD+'+s.spd);
+      if(s.crit) parts.push('Crit+'+s.crit+'%');
+      sEl.textContent=parts.slice(0,2).join(' ');
+      lEl.textContent=it.upg>0?'+'+it.upg:'';
+    } else {
+      nEl.className='slot-empty'; nEl.textContent='空'; sEl.textContent=''; lEl.textContent='';
+    }
+  });
+  // Mats & currencies
+  $('inv-ct').textContent=G.inventory.length;
+  $('m-c').textContent=G.mats.common||0;
+  $('m-r').textContent=G.mats.rare||0;
+  $('m-e').textContent=G.mats.epic||0;
+  $('cur-reforge').textContent=G.currencies.reforge||0;
+  $('cur-essence').textContent=G.currencies.essence||0;
+  $('cur-catalyst').textContent=G.currencies.catalyst||0;
+
+  // Render sort/filter bar
+  const sortBar=$('inv-sort-bar');
+  if(sortBar){
+    sortBar.innerHTML='';
+    const sorts=[['rar','稀有度'],['atk','ATK'],['slot','类型']];
+    sorts.forEach(([k,l])=>{
+      const b=document.createElement('button');
+      b.className='inv-act'+(invSort===k?' on':'');
+      b.style.cssText=invSort===k?'border-color:var(--gold);color:var(--gold)':'';
+      b.textContent=l; b.onclick=()=>{ invSort=k; renderEquip(); };
+      sortBar.appendChild(b);
+    });
+    const sep=document.createElement('span'); sep.style.cssText='flex:1';
+    sortBar.appendChild(sep);
+    const filters=[['all','全部'],['weapon','武器'],['head','头'],['body','身'],['legs','腿']];
+    filters.forEach(([k,l])=>{
+      const b=document.createElement('button');
+      b.className='inv-act'+(invFilter===k?' on':'');
+      b.style.cssText=invFilter===k?'border-color:var(--ice2);color:var(--ice2)':'';
+      b.textContent=l; b.onclick=()=>{ invFilter=k; renderEquip(); };
+      sortBar.appendChild(b);
+    });
+  }
+
+  // Build + sort + filter inventory
+  const list=$('inv-list'); list.innerHTML='';
+  if(!G.inventory.length){
+    list.innerHTML='<div style="font-size:.65rem;color:var(--tx3);font-style:italic;padding:8px">仓库为空 — 战斗掉落装备</div>'; return;
+  }
+  let items=[...G.inventory];
+  if(invFilter!=='all') items=items.filter(i=>i.slot===invFilter);
+  if(invSort==='rar')  items.sort((a,b)=>RARITIES.indexOf(b.rar)-RARITIES.indexOf(a.rar)||b.upg-a.upg);
+  if(invSort==='atk')  items.sort((a,b)=>getItemEquipStats(b).atk-getItemEquipStats(a).atk);
+  if(invSort==='slot') items.sort((a,b)=>SLOTS.indexOf(a.slot)-SLOTS.indexOf(b.slot)||RARITIES.indexOf(b.rar)-RARITIES.indexOf(a.rar));
+
+  items.forEach(it => {
+    const card=document.createElement('div'); card.className='inv-card';
+    const s=getItemEquipStats(it);
+    const affHTML=itemAffixHTML(it);
+    const equipped=G.equipped[it.slot];
+    const diff=equipped?s.atk-getItemEquipStats(equipped).atk:null;
+    const diffStr=diff!==null?(' '+(diff>=0?'▲':'▼')+Math.abs(diff)):' ★新';
+    const diffCol=diff===null?'var(--gold2)':diff>=0?'var(--jade2)':'var(--ember2)';
+    const statLine=[s.atk?'ATK+'+s.atk:'',s.spd?'SPD+'+s.spd:'',s.crit?'Crit+'+s.crit+'%':''].filter(Boolean).slice(0,3).join(' ');
+    card.innerHTML=`
+      <div style="flex-shrink:0;font-size:1.1rem">${SLOT_ICON[it.slot]}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.65rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" class="${RCLS[it.rar]}">[${RNAME[it.rar]}] ${it.name}${it.upg>0?' <span style=color:var(--goldd)>+'+it.upg+'</span>':''}</div>
+        <div style="font-size:.52rem;color:var(--tx3);margin-top:1px">${statLine} <span style="color:${diffCol};font-size:.5rem">${diffStr}</span></div>
+        ${affHTML?`<div style="margin-top:1px">${affHTML}</div>`:''}
+        ${it.setId?`<div style="font-size:.48rem;color:var(--gold)">${SETS.find(s=>s.id===it.setId)?.name||''}</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:3px;flex-shrink:0">
+        <button class="ibtn ibtn-eq" onclick="event.stopPropagation();doEquipById(${it.id})">装备</button>
+        <button class="ibtn ibtn-sl" onclick="event.stopPropagation();quickSalv(${it.id})">分解</button>
+      </div>`;
+    // Tap card = equip directly
+    card.style.cursor='pointer';
+    card.addEventListener('click', ()=>doEquipById(it.id));
+    list.appendChild(card);
+  });
+}
+
+// Safe equip by id — avoids inline arrow function issues
+function doEquipById(id) {
+  const it=G.inventory.find(i=>i.id===id);
+  if(it){ equipItem(it); renderEquip(); }
+}
+
+function quickSalv(id) {
+  const it=G.inventory.find(x=>x.id===id); if(!it) return;
+  salvageItem(it); renderEquip(); updateStats();
+  log('🔨 分解 '+it.name,'sys');
+}
+
+// openSlot: click slot to see equipped item detail + swap options
+function openSlot(slot) {
+  const eq=G.equipped[slot];
+  const avail=G.inventory.filter(i=>i.slot===slot).sort((a,b)=>RARITIES.indexOf(b.rar)-RARITIES.indexOf(a.rar)||b.upg-a.upg);
+  if(!eq&&!avail.length){ notif(SLOT_NAME[slot]+' 无装备'); return; }
+
+  $('m-title').textContent=SLOT_ICON[slot]+' '+SLOT_NAME[slot];
+  $('m-extra').textContent='';
+  const body=$('m-body'); body.innerHTML='';
+  const btns=$('m-btns'); btns.innerHTML='';
+
+  // Currently equipped
+  if(eq) {
+    const eqS=getItemEquipStats(eq);
+    const affH=itemAffixHTML(eq);
+    const section=document.createElement('div');
+    section.style.cssText='margin-bottom:10px;padding:9px;background:rgba(58,158,110,.07);border:1px solid rgba(58,158,110,.3);border-radius:8px;';
+    section.innerHTML=`
+      <div style="font-size:.5rem;color:var(--jade2);margin-bottom:4px;letter-spacing:.08em">▶ 当前装备</div>
+      <div class="${RCLS[eq.rar]}" style="font-size:.72rem;font-weight:700">[${RNAME[eq.rar]}] ${eq.name}${eq.upg>0?' +'+eq.upg:''}</div>
+      <div style="font-size:.56rem;color:var(--tx3);margin-top:3px">${[eqS.atk?'ATK+'+eqS.atk:'',eqS.spd?'SPD+'+eqS.spd:'',eqS.crit?'Crit+'+eqS.crit+'%':''].filter(Boolean).join(' · ')}</div>
+      ${affH?`<div style="margin-top:3px">${affH}</div>`:''}`;
+    // Buttons: upgrade + unequip
+    const brow=document.createElement('div'); brow.style.cssText='display:flex;gap:5px;margin-top:7px;';
+    const upBtn=document.createElement('button'); upBtn.className='ibtn ibtn-eq';
+    upBtn.textContent='升级 ('+fmt(upgCost(eq))+'金)';
+    upBtn.onclick=()=>{ upgradeItem(eq); openSlot(slot); };
+    const unBtn=document.createElement('button'); unBtn.className='ibtn ibtn-sl'; unBtn.textContent='卸下';
+    unBtn.onclick=()=>{ unequipSlot(slot); closeModal(); renderEquip(); };
+    brow.appendChild(upBtn); brow.appendChild(unBtn); section.appendChild(brow);
+    body.appendChild(section);
+  }
+
+  // Available in inventory
+  if(avail.length) {
+    const hd=document.createElement('div');
+    hd.style.cssText='font-size:.52rem;color:var(--tx3);letter-spacing:.08em;margin-bottom:6px;';
+    hd.textContent='仓库 — 点击立即装备：';
+    body.appendChild(hd);
+    avail.forEach(it=>{
+      const itS=getItemEquipStats(it);
+      const eqS=eq?getItemEquipStats(eq):{atk:0};
+      const diff=itS.atk-eqS.atk;
+      const diffCol=diff>=0?'var(--jade2)':'var(--ember2)';
+      const affH=itemAffixHTML(it);
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:8px;padding:9px 10px;background:var(--s1);border:1px solid var(--bd2);border-radius:8px;margin-bottom:5px;cursor:pointer;transition:border-color .15s;';
+      row.onmouseenter=()=>row.style.borderColor='var(--goldd)';
+      row.onmouseleave=()=>row.style.borderColor='var(--bd2)';
+      const info=document.createElement('div'); info.style.flex='1';
+      info.innerHTML=`
+        <div class="${RCLS[it.rar]}" style="font-size:.68rem;font-weight:700">[${RNAME[it.rar]}] ${it.name}${it.upg>0?' +'+it.upg:''} <span style="color:${diffCol};font-size:.58rem">(${diff>=0?'+':''}${diff})</span></div>
+        <div style="font-size:.54rem;color:var(--tx3);margin-top:2px">${[itS.atk?'ATK+'+itS.atk:'',itS.spd?'SPD+'+itS.spd:'',itS.crit?'Crit+'+itS.crit+'%':''].filter(Boolean).join(' · ')}</div>
+        ${affH?`<div style="margin-top:2px">${affH}</div>`:''}`;
+      const arr=document.createElement('div');
+      arr.style.cssText='color:var(--jade2);font-size:.8rem;flex-shrink:0;font-weight:700;'; arr.textContent='→';
+      row.appendChild(info); row.appendChild(arr);
+      row.onclick=()=>{ equipItem(it); closeModal(); renderEquip(); };
+      body.appendChild(row);
+    });
+  } else if(!eq) {
+    const e=document.createElement('div'); e.style.cssText='font-size:.64rem;color:var(--tx3);font-style:italic;padding:4px 0;';
+    e.textContent='仓库中没有'+SLOT_NAME[slot]+'装备'; body.appendChild(e);
+  }
+
+  const cancel=document.createElement('button'); cancel.className='m-btn m-no'; cancel.textContent='关闭'; cancel.onclick=closeModal;
+  btns.appendChild(cancel);
+  $('overlay').classList.add('on');
+}
+
+// ── SKILLS RENDER ────────────────────────────────────────────
+function renderSkills() {
+  const c=$('skill-scroll'); c.innerHTML='';
+  const groups=[
+    { label:'⚔ 攻击型', type:'atk' },
+    { label:'🟡 增益型', type:'buff' },
+    { label:'🟢 特殊型', type:'special' },
+  ];
+  groups.forEach(g=>{
+    const sk=SKILLS.filter(s=>s.type===g.type);
+    const div=document.createElement('div'); div.className='skill-group';
+    div.innerHTML=`<div class="skill-group-title">${g.label}</div>`;
+    sk.forEach(sk=>{
+      const learned=G.skills.includes(sk.id);
+      const canLearn=G.level>=sk.unlockLv;
+      const card=document.createElement('div');
+      card.className='skill-card sk-type-'+sk.type+(learned?' learned':!canLearn?' locked':'');
+      card.innerHTML=`
+        <div class="sk-icon">${sk.icon}</div>
+        <div class="sk-info">
+          <div class="sk-name">${sk.name}</div>
+          <div class="sk-desc">${sk.desc}</div>
+          <div class="sk-unlock" style="color:${canLearn?'var(--jade2)':'var(--tx3)'}">
+            ${learned?'已学会':canLearn?'可以学习':'需要 Lv.'+sk.unlockLv}
+          </div>
+        </div>
+        ${learned?'<div class="sk-badge">已激活</div>':''}`;
+      if(!learned&&canLearn) card.onclick=()=>learnSkill(sk.id);
+      div.appendChild(card);
+    });
+    c.appendChild(div);
+  });
+}
+
+// ── TASKS RENDER ─────────────────────────────────────────────
+function renderTasks() {
+  const c=$('tasks-scroll'); c.innerHTML='';
+  const panel=(title, tasks)=>{
+    const p=document.createElement('div'); p.className='panel';
+    p.innerHTML=`<div class="panel-title">${title}</div>`;
+    if(!tasks||!tasks.length){ p.innerHTML+=`<div style="font-size:.64rem;color:var(--tx3)">暂无任务</div>`; return p; }
+    tasks.forEach(t=>{
+      const pct=Math.min(100,(t.progress||0)/t.target*100);
+      const d=document.createElement('div'); d.className='task-card';
+      d.innerHTML=`
+        <div class="task-top">
+          <div class="task-name">${t.n}</div>
+          ${t.done?'<div class="task-done">✓ 已完成</div>':''}
+        </div>
+        <div class="task-desc">${t.d}</div>
+        <div class="task-prog-row">
+          <div class="task-prog-bar"><div class="task-prog-fill" style="width:${pct}%"></div></div>
+          <div class="task-prog-txt">${Math.min(t.progress||0,t.target)} / ${t.target}</div>
+        </div>
+        <div class="task-reward">奖励: 💰${fmt(t.reward.gold)} · ${RNAME[t.reward.mat]}碎片×${t.reward.matAmt}${t.reward.gemKey?' · 宝石×1':''}</div>`;
+      p.appendChild(d);
+    });
+    return p;
+  };
+  c.appendChild(panel('📅 每日任务', G.dailyTasks));
+  c.appendChild(panel('📆 每周任务', G.weeklyTasks));
+  // Daily streak
+  const sp=document.createElement('div'); sp.className='panel';
+  sp.innerHTML=`<div class="panel-title">签到连续</div><div style="font-size:.8rem;color:var(--gold);text-align:center;padding:8px">${G.dailyStreak} 天 🔥</div>`;
+  c.appendChild(sp);
+}
+
+// ── SHOP RENDER ──────────────────────────────────────────────
+let shopStock=[];
+function refreshShop(free=false) {
+  if(!free){ if(G.gold<500){ notif('刷新需要500金'); return; } G.gold-=500; updateStats(); }
+  shopStock=shuf([...SHOP_CATALOG]).slice(0,6);
+  renderShop();
+}
+function renderShop() {
+  const c=$('shop-list'); c.innerHTML='';
+  shopStock.forEach(item=>{
+    const cost=item.c();
+    const d=document.createElement('div'); d.className='shop-card';
+    d.innerHTML=`
+      <div class="sh-icon">${item.icon}</div>
+      <div class="sh-info">
+        <div class="sh-name">${item.n}</div>
+        <div class="sh-desc">${item.d}</div>
+        <div class="sh-cost">💰 ${fmt(cost)}</div>
+      </div>
+      <button class="sh-buy" onclick="buyShop('${item.id}')">购买</button>`;
+    c.appendChild(d);
+  });
+}
+function buyShop(id) {
+  const item=shopStock.find(i=>i.id===id); if(!item) return;
+  const c=item.c(); if(G.gold<c){ notif('金币不足'); return; }
+  G.gold-=c; item.b(); updateStats(); checkAchs(); saveGame();
+  log('🛒 '+item.n,'loot'); pop('s-gold');
+}
+
+// ── PASSIVE RENDER ───────────────────────────────────────────
+function renderPassive() {
+  const c=$('passive-scroll-inner')||$('passive-scroll'); if(!c) return;
+  c.innerHTML='';
+  PASSIVES.forEach(track=>{
+    const td=document.createElement('div'); td.className='track';
+    td.innerHTML=`<div class="track-hd" style="color:${track.color}">${track.icon} ${track.name}</div>`;
+    track.nodes.forEach(node=>{
+      const done=G.done.includes(node.id);
+      const reqOk=!node.req||G.done.includes(node.req);
+      const nd=document.createElement('div');
+      nd.className='p-node'+(done?' done':!reqOk?' locked':'');
+      nd.innerHTML=`
+        <div class="p-icon">${done?'✅':reqOk?track.icon:'🔒'}</div>
+        <div class="p-info">
+          <div class="p-name">${node.n}</div>
+          <div class="p-desc">${node.d}</div>
+          <div class="p-cost">${done?'已解锁':'💰 '+fmt(node.c)}</div>
+        </div>
+        ${done?'<div class="p-done-badge">激活</div>':''}`;
+      if(!done&&reqOk) nd.onclick=()=>unlockPassive(node);
+      td.appendChild(nd);
+    });
+    c.appendChild(td);
+  });
+}
+
+// ── SPEC / TALENT ────────────────────────────────────────────
+function renderSpecCards() {
+  ['atk','crit','spd'].forEach(t=>{ $('spec-'+t).className='spec-card'+(G.spec===t?' on-'+t:''); });
+}
+function updateSpecPill() {
+  const p=$('spec-pill');
+  if(!G.spec){ p.textContent='无专精'; p.className=''; return; }
+  p.textContent={atk:'⚔ 战士',crit:'🎯 刺客',spd:'⚡ 疾风'}[G.spec];
+  p.className=G.spec;
+}
+function renderTalent() {
+  $('t-icon').textContent=T.icon; $('t-name').textContent=T.name; $('t-desc').textContent=T.desc;
+  let c='已触发 '+G.tN+' 次';
+  if(T.id==='battle')c+=' · ATK+'+Math.floor(G.tAtk);
+  if(T.id==='crit_hunger')c+=' · Crit+'+G.tCrit.toFixed(1)+'%';
+  if(T.id==='swift')c+=' · SPD+'+G.tSpd.toFixed(2);
+  if(T.id==='plunder')c+=' · ATK+'+Math.floor(G.tAtk);
+  $('t-count').textContent=c;
+  $('rc-txt').textContent=fmt(G.rerollCost)+' 金';
+  const hl=$('history-list'); hl.innerHTML='';
+  G.rerollHist.slice().reverse().slice(0,5).forEach(h=>{
+    const d=document.createElement('div'); d.style.cssText='font-size:.58rem;color:var(--tx3);padding:2px 0;'; d.textContent='第'+h.n+'次 → '+h.name+'（'+fmt(h.c)+'金）';hl.appendChild(d);
+  });
+}
+function confirmReroll() {
+  if(G.gold<G.rerollCost){ openModal('金币不足','需要 '+fmt(G.rerollCost)+' 金\n当前：'+fmt(G.gold)+' 金',[{label:'确认',cls:'m-no',cb:closeModal}]); return; }
+  openModal('🎲 重置天赋','花费 '+fmt(G.rerollCost)+' 金重置天赋？\n下次费用：'+fmt(G.rerollCost*3)+' 金\n\n⚠ 天赋随机，无法预测结果',
+    [{label:'确认重置',cls:'m-ok',cb:doReroll},{label:'取消',cls:'m-no',cb:closeModal}]);
+}
+
+// ── AWAKEN ───────────────────────────────────────────────────
+function renderAwaken() {
+  const idx=G.awakenings;
+  if(idx>=AWAKENING_REQS.length){ $('awaken-req').textContent='已达最高觉醒！'; $('awaken-btn').disabled=true; $('awaken-btn').textContent='已完成'; return; }
+  const req=AWAKENING_REQS[idx]; const bonus=AWAKENING_BONUSES[idx];
+  const ok=canAwaken();
+  $('awaken-req').textContent=`${req.desc}\n\n要求：Lv.${req.level} · Stage ${req.stage} · ${fmt(req.gold)}金\n奖励：${bonus.desc}\n\n当前：Lv.${G.level} · Stage ${G.best} · ${fmt(G.gold)}金`;
+  $('awaken-btn').disabled=!ok;
+  $('awaken-btn').textContent=ok?'🌅 觉醒！':'条件不足';
+}
+function confirmAwaken() {
+  if(!canAwaken()){ notif('条件不足'); return; }
+  const req=AWAKENING_REQS[G.awakenings]; const bonus=AWAKENING_BONUSES[G.awakenings];
+  openModal('🌅 觉醒',
+    req.desc+'\n\n觉醒后：\n· 等级重置至1级\n· 阶段重置至1\n· 保留所有装备\n· 保留30%基础ATK\n\n获得：'+bonus.desc,
+    [{label:'确认觉醒',cls:'m-ok',cb:()=>{ doAwaken(); closeModal(); renderAwaken(); }},{label:'取消',cls:'m-no',cb:closeModal}]);
+}
+
+// ── ACHIEVEMENTS ─────────────────────────────────────────────
+function renderAchs() {
+  const list=$('ach-list'); list.innerHTML='';
+  $('ach-count').textContent=G.achs.length;
+  $('ach-total').textContent=ACHS.length;
+  ACHS.forEach(a=>{
+    const done=G.achs.includes(a.id);
+    const d=document.createElement('div'); d.className='ach-item '+(done?'done':'locked');
+    d.innerHTML=`<div class="ach-icon">${a.icon}</div><div class="ach-info"><div class="ach-name">${a.n}</div><div class="ach-desc">${a.d}</div></div>${done?'<span style="color:var(--jade2);font-size:.7rem">✓</span>':''}`;
+    list.appendChild(d);
+  });
+}
+
+// ── MODAL ────────────────────────────────────────────────────
+function openModal(title, body, btnsArr) {
+  $('m-title').textContent=title;
+  $('m-body').textContent=body;
+  $('m-extra').textContent='';
+  const bc=$('m-btns'); bc.innerHTML='';
+  (btnsArr||[]).forEach(({label,cls,cb})=>{
+    const b=document.createElement('button'); b.className='m-btn '+cls; b.textContent=label; b.onclick=cb; bc.appendChild(b);
+  });
+  $('overlay').classList.add('on');
+}
+function closeModal() { $('overlay').classList.remove('on'); $('m-body').innerHTML=''; $('m-btns').innerHTML=''; }
+
+// ── START ────────────────────────────────────────────────────
+window.addEventListener('load', initGame);
+</script>
+</body>
+</html>
