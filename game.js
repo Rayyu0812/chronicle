@@ -40,6 +40,11 @@ function newGame() {
     enemyType:'normal', enemyShield:0, enemyPhased:false,
     // Skills
     skills:[],
+    // Team system (Phase D)
+    units:[], // initialized in initGame
+    activeUnit:0, // which unit is currently attacking
+    teamAtkMult:1, teamCdmgBonus:0, teamTruePct:0, teamAllMult:1, teamDoubleHit:0,
+    unit2Unlocked:false,
     // Passives
     done:[],
     pb:{ trainAtkMult:0, trainFlat:0, demolish:0, spdCap:0, doubleHit:0,
@@ -53,6 +58,34 @@ function newGame() {
     lastSeen: Date.now(),
     crits:0, goldEarned:0, itemsGot:0,
     speed:1, autoTrain:false, autoRest:false,
+    // Gacha (Phase E)
+    gachaCrystals:0, gachaPulls:0, gachaPity:0,
+    // Rune system
+    runesEquipped:[], runeAtk:0, runeSpd:0, runeCrit:0, runeCdmg:0,
+    runeGoldMult:0, runeTruePct:0, runeComboBonus:false,
+    runeTime:0, runeMythicMult:0, runePrestigeMult:1,
+    // Title system
+    titlesEarned:[], activeTitle:null,
+    // Weekly boss
+    weeklyBossKills:0, lastWeeklyBoss:'',
+    // Stage modifiers
+    currentMod:null, stageModCount:0,
+    // Gear evolution
+    gearEvolutions:0,
+    // Auto-upgrade
+    autoUpgradeMode:'off', autoUpgradeSlot:'weapon', autoUpgradeCount:0,
+    // Combo skill
+    comboProcDmgMult:1,
+    // Dungeons/challenges totals
+    totalDungeons:0, totalChallenges:0,
+    // Prestige (転生)
+    prestigeCount:0, prestigeMult:1,
+    // Challenge + Dungeon tracking
+    eliteKills:0, upgradeCount:0,
+    dungeonsDone:{},
+    challengesBest:{},
+    // Zone tracking
+    currentZone:'荒野平原',
   };
 }
 
@@ -97,6 +130,19 @@ function totalAtk() {
   if(G._berserkActive) a=Math.floor(a*2);
   // Resonance doubles talent atk bonus
   if(hasSkill('resonance')) a += Math.floor(G.tAtk); // double tAtk
+  // Rune bonuses
+  a += (G.runeAtk||0);
+  if(G.runeMythicMult) a=Math.floor(a*(1+G.runeMythicMult));
+  if(G.runeComboBonus) a=Math.floor(a*(1+Math.min(G.combo,200)*0.03));
+  // Stage modifier all-stat boost
+  if(G.currentMod&&G.currentMod.allMult) a=Math.floor(a*G.currentMod.allMult);
+  // Prestige multiplier
+  if(G.prestigeMult&&G.prestigeMult>1) a=Math.floor(a*G.prestigeMult);
+  // Prestige rune bonus
+  if(G.runePrestigeMult&&G.runePrestigeMult>1&&G.prestigeCount>0) a=Math.floor(a*G.runePrestigeMult);
+  // Team synergy bonuses
+  if(G.teamAtkMult&&G.teamAtkMult>1) a=Math.floor(a*G.teamAtkMult);
+  if(G.teamAllMult&&G.teamAllMult>1) a=Math.floor(a*G.teamAllMult);
   return Math.max(1, Math.floor(a));
 }
 
@@ -108,12 +154,14 @@ function totalSpd() {
   if(hasSkill('time_acc')){ const sk=SKILLS.find(s=>s.id==='time_acc'); s+=(sk.spdBonus?sk.spdBonus():0); }
   // Awakening SPD bonuses
   for(const b of (G.awakeningBonuses||[])) s+=b.spdBonus||0;
+  s += (G.runeSpd||0);
   return Math.min(+(s.toFixed(2)), spdCap());
 }
 
 function totalCrit() {
   let c = G.critChance + G.eqCrit + (G.tCrit||0) + G.setBonusCrit - (G.tCritPen||0);
   for(const b of (G.awakeningBonuses||[])) c+=b.critBonus||0;
+  c += (G.runeCrit||0);
   return Math.max(0, c);
 }
 
@@ -121,6 +169,7 @@ function totalCritDmg() {
   let c = G.critDmg + G.eqCritDmg + (G.spec==='crit'?50:0);
   // Shadow set 4pc
   if(setCount('shadow')>=4) c+=100;
+  c += (G.runeCdmg||0);
   return c;
 }
 
@@ -137,9 +186,8 @@ function calcTimeLimit() {
       const a=getAffix(sid); if(a&&a.roll){const r=a.roll(1);if(r.time)t+=r.time;}
     }
   }
-  // Time ctrl skill
   if(hasSkill('time_ctrl')) t+=30;
-  // Passive s4
+  t += (G.runeTime||0);
   return t;
 }
 
@@ -209,10 +257,23 @@ function spawnDmg(dmg, isCrit, isSpecial) {
   const l=$('fx');
   const d=document.createElement('div');
   d.className='fdmg '+(isSpecial?'sp':isCrit?'c':'n');
+  // Scale crit number size by damage ratio
+  if(isCrit){
+    const ratio = totalAtk()>0 ? dmg/totalAtk() : 1;
+    if(ratio>5)  d.style.fontSize='3rem';
+    else if(ratio>2) d.style.fontSize='2.4rem';
+  }
   d.textContent=(isCrit?'💥':'')+(isSpecial?'⚡':'')+fmt(dmg);
-  d.style.left=Math.floor(10+Math.random()*75)+'%';
-  d.style.top=Math.floor(30+Math.random()*30)+'%';
+  d.style.left=Math.floor(15+Math.random()*65)+'%';
+  d.style.top=Math.floor(25+Math.random()*30)+'%';
   l.appendChild(d); setTimeout(()=>d.remove(),900);
+  // Crit screen flash
+  if(isCrit && G.speed<=3){
+    const cf=$('crit-flash');
+    if(cf){ cf.classList.remove('show'); void cf.offsetWidth; cf.classList.add('show'); }
+  }
+  // Screen shake on huge crits
+  if(isCrit && dmg>totalAtk()*3) shake();
 }
 
 function spawnParts(type) {
@@ -248,6 +309,45 @@ function loadGame() {
     T = TALENTS.find(t=>t.id===G.talentId) || TALENTS[0];
     if(!G.gear) G.gear = makeInitialGear();
     if(!G.upgMats) G.upgMats = { atk_stone:0, spd_stone:0, crit_stone:0, def_stone:0, boss_core:0, mythic_shard:0 };
+    if(!G.gachaCrystals) G.gachaCrystals=0;
+    if(!G.gachaPulls) G.gachaPulls=0;
+    if(!G.gachaPity) G.gachaPity=0;
+    if(!G.units) G.units=[{ id:'warrior', name:'战士', icon:'⚔', unlocked:true, baseAtk:0, atkSpd:0, critChance:0, critDmg:0, spec:null, gear:null, skills:[] }];
+    if(G.unit2Unlocked===undefined) G.unit2Unlocked=false;
+    if(!G.units||!Array.isArray(G.units)||!G.units.length){
+      const warrior=makeUnit('warrior','战士'); warrior.gear=makeInitialGear(); warrior.unlocked=true;
+      G.units=[warrior];
+    }
+    if(G.activeUnit===undefined) G.activeUnit=0;
+    if(!G.teamAtkMult) G.teamAtkMult=1;
+    if(!G.teamAllMult) G.teamAllMult=1;
+    if(!G.teamCdmgBonus) G.teamCdmgBonus=0;
+    if(!G.teamTruePct) G.teamTruePct=0;
+    if(!G.teamDoubleHit) G.teamDoubleHit=0;
+    calcTeamSynergies();
+    if(!G.prestigeCount) G.prestigeCount=0;
+    if(!G.prestigeMult) G.prestigeMult=1;
+    if(!G.eliteKills) G.eliteKills=0;
+    if(!G.upgradeCount) G.upgradeCount=0;
+    if(!G.dungeonsDone) G.dungeonsDone={};
+    if(!G.challengesBest) G.challengesBest={};
+    if(!G.runesEquipped) G.runesEquipped=[];
+    if(!G.runeInventory) G.runeInventory=[];
+    if(!G.titlesEarned) G.titlesEarned=[];
+    if(!G.weeklyBossKills) G.weeklyBossKills=0;
+    if(!G.totalDungeons) G.totalDungeons=0;
+    if(!G.totalChallenges) G.totalChallenges=0;
+    if(!G.gearEvolutions) G.gearEvolutions=0;
+    if(!G.autoUpgradeMode) G.autoUpgradeMode='off';
+    if(!G.autoUpgradeCount) G.autoUpgradeCount=0;
+    if(!G.bossPhasesDone) G.bossPhasesDone=0;
+    if(!G.bossAtkMult) G.bossAtkMult=1;
+    if(!G.personalBests) G.personalBests={};
+    if(!G.weeklyBossKills) G.weeklyBossKills=0;
+    if(G.pb.extraTime===undefined) G.pb.extraTime=0;
+    if(!G.pb.goldMult) G.pb.goldMult=0;
+    if(!G.stageModCount) G.stageModCount=0;
+    if(!G.comboProcDmgMult) G.comboProcDmgMult=1;
     // Recompute all gear stats on load
     for(const g of Object.values(G.gear)) recomputeGearStats(g);
     recalcEq();
@@ -263,26 +363,253 @@ function loadGame() {
 }
 function manualSave() { saveGame(); log('💾 已保存','sys'); }
 setInterval(saveGame, 30000);
+setInterval(runAutoUpgrade, 1000);
 
-// ── OFFLINE GAINS ─────────────────────────────────────────────
-function processOffline() {
-  const now = Date.now();
-  const elapsed = Math.min((now - (G.lastSeen||now)) / 1000, 3600*8); // max 8 hours
-  if(elapsed < 30) return;
-  const minutes = Math.floor(elapsed/60);
-  const goldRate = totalAtk() * totalSpd() * 0.5;
-  const offlineGold = Math.floor(goldRate * elapsed * 0.1);
-  if(offlineGold > 0) {
-    G.gold += offlineGold;
-    G.mats.common += Math.floor(elapsed/300); // 1 mat per 5 minutes
-    G.mats.rare += Math.floor(elapsed/900);   // 1 mat per 15 minutes
-    setTimeout(()=>{
-      openModal('💤 离线收益',
-        `你离开了 ${minutes} 分钟\n\n获得：\n💰 ${fmt(offlineGold)} 金币\n🪨 ${Math.floor(elapsed/300)} 普通碎片\n💎 ${Math.floor(elapsed/900)} 稀有碎片`,
-        [{ label:'确认', cls:'m-ok', cb:closeModal }]);
-    }, 1000);
+function runAutoUpgrade() {
+  if(!G.gear||G.autoUpgradeMode==='off') return;
+  const slots = G.autoUpgradeMode==='slot'?[G.autoUpgradeSlot]:SLOTS;
+  for(const slot of slots){
+    const g=G.gear[slot]; if(!g||!g.pathId) continue;
+    const paths=GEAR_PATHS[slot];
+    const path=paths&&paths.find(p=>p.id===g.pathId); if(!path) continue;
+    const lv=g.pathLv||0;
+    if(lv>=path.levels.length) continue;
+    const cost=path.levels[lv].cost;
+    const have=G.upgMats[path.mat]||0;
+    // Balanced mode: only upgrade if this slot is lowest
+    if(G.autoUpgradeMode==='balanced'){
+      const minLv=Math.min(...SLOTS.map(s=>G.gear[s]?G.gear[s].pathLv||0:0));
+      if((g.pathLv||0)>minLv+2) continue;
+    }
+    if(have>=cost){
+      upgradeGear(slot,'path');
+      G.autoUpgradeCount=(G.autoUpgradeCount||0)+1;
+      break; // one upgrade per tick
+    }
   }
 }
+
+// ── OFFLINE GAINS ─────────────────────────────────────────────
+
+// ══════════════════════════════════════════════════
+//  DUNGEON SYSTEM
+// ══════════════════════════════════════════════════
+let dungeonRunning = false;
+let dungeonStage = 0;
+let dungeonData = null;
+
+function startDungeon(dungeonId) {
+  const d = DUNGEONS.find(x=>x.id===dungeonId);
+  if(!d){ notif('副本不存在'); return; }
+  if(G.stage < d.unlockStage){ notif('需要Stage '+d.unlockStage); return; }
+  const today = new Date().toDateString();
+  if((G.dungeonsDone[dungeonId+'_'+today])){ notif('今日已完成该副本，明天再来'); return; }
+  dungeonRunning = true;
+  dungeonStage = 0;
+  dungeonData = d;
+  stopTimers();
+  log('▶ 进入副本：'+d.icon+' '+d.name, 'boss');
+  runDungeonStage();
+}
+
+function runDungeonStage() {
+  if(!dungeonRunning || !dungeonData) return;
+  if(dungeonStage >= dungeonData.stages) {
+    // Dungeon complete!
+    dungeonRunning = false;
+    const today = new Date().toDateString();
+    G.dungeonsDone[dungeonData.id+'_'+today] = true;
+    G.totalDungeons=(G.totalDungeons||0)+1;
+    // Give rewards
+    const mat = dungeonData.matReward;
+    const amt = dungeonData.matAmt;
+    G.upgMats[mat] = (G.upgMats[mat]||0) + amt;
+    earnGachaCrystals(dungeonData.crystalReward);
+    log('✅ 副本完成！'+UPGRADE_MATS[mat].icon+' '+UPGRADE_MATS[mat].name+'×'+amt+' 💠×'+dungeonData.crystalReward, 'boss');
+    notif('✅ 副本完成！获得 '+UPGRADE_MATS[mat].name+'×'+amt, '#c9a84c');
+    updateStats();
+    restartCombat();
+    return;
+  }
+  dungeonStage++;
+  const enemyHp = Math.floor(30 * Math.pow(1.15, G.stage-1) * dungeonStage * 2);
+  const timeLimit = 30;
+  log('⚔ 副本关卡 '+dungeonStage+'/'+dungeonData.stages+' HP:'+fmt(enemyHp), 'ev');
+  // Simple auto-fight for dungeon
+  let hp = enemyHp;
+  let t = 0;
+  const interval = setInterval(()=>{
+    if(!dungeonRunning){ clearInterval(interval); return; }
+    const dmg = Math.floor(totalAtk() * (0.9+Math.random()*.2) * (Math.random()*100<totalCrit()?totalCritDmg()/100:1));
+    hp -= dmg; t++;
+    if(hp <= 0 || t >= 60) {
+      clearInterval(interval);
+      if(hp > 0) {
+        // Failed
+        dungeonRunning = false;
+        log('❌ 副本失败 关卡'+dungeonStage, 'lose');
+        notif('副本失败');
+        restartCombat();
+      } else {
+        log('✓ 副本关卡'+dungeonStage+' 完成', 'win');
+        setTimeout(runDungeonStage, 300/G.speed);
+      }
+    }
+  }, 500/G.speed);
+}
+
+// ══════════════════════════════════════════════════
+//  CHALLENGE MODE
+// ══════════════════════════════════════════════════
+let challengeRunning = false;
+let challengeData = null;
+let challengeStage = 0;
+
+function startChallenge(challengeId) {
+  const c = CHALLENGES.find(x=>x.id===challengeId);
+  if(!c){ notif('挑战不存在'); return; }
+  if(G.stage < c.unlockStage){ notif('需要Stage '+c.unlockStage); return; }
+  challengeRunning = true;
+  challengeData = c;
+  challengeStage = G.stage;
+  log('🏆 开始挑战：'+c.icon+' '+c.name, 'boss');
+  notif('挑战开始：'+c.name);
+  stopTimers();
+  startChallengeRound();
+}
+
+function startChallengeRound() {
+  if(!challengeRunning || !challengeData) return;
+  const c = challengeData;
+  const m = c.modifier;
+  let timeLimit = m.timeLimit || calcTimeLimit();
+  if(m.infinite) timeLimit = 999999;
+  const atkMult = m.atkMult || 1;
+  const noCrit = m.noCrit || false;
+  const fixedSpd = m.fixedSpd || null;
+  const atkOverride = Math.floor(totalAtk() * atkMult);
+  const spdOverride = fixedSpd || totalSpd();
+  const enemyHp = Math.floor(50 * Math.pow(1.08, challengeStage-1));
+  let hp = enemyHp;
+  let t = 0;
+  const atkMs = (1000/spdOverride)/G.speed;
+  const cI = setInterval(()=>{
+    if(!challengeRunning){ clearInterval(cI); return; }
+    const isCrit = !noCrit && Math.random()*100 < totalCrit();
+    let dmg = Math.floor(atkOverride * (isCrit ? totalCritDmg()/100 : 0.9+Math.random()*.2));
+    if(m.oneShot){ clearInterval(cI); if(dmg >= enemyHp){ winChallenge(); } else { loseChallenge(); } return; }
+    hp -= dmg; t++;
+    spawnDmg(dmg, isCrit, false);
+    if(hp <= 0) { clearInterval(cI); winChallenge(); return; }
+    if(t*atkMs/1000 >= timeLimit){ clearInterval(cI); loseChallenge(); }
+  }, atkMs);
+}
+
+function winChallenge() {
+  const c = challengeData;
+  challengeStage++;
+  G.totalChallenges=(G.totalChallenges||0)+1;
+  const best = G.challengesBest[c.id] || 0;
+  if(challengeStage > best) G.challengesBest[c.id] = challengeStage;
+  // Reward
+  const r = c.reward;
+  earnGachaCrystals(r.crystals||0);
+  if(r.bossCore) G.upgMats.boss_core = (G.upgMats.boss_core||0) + r.bossCore;
+  if(r.mythicShard) G.upgMats.mythic_shard = (G.upgMats.mythic_shard||0) + r.mythicShard;
+  log('✅ 挑战Stage '+challengeStage+' 完成！ 💠+'+r.crystals, 'win');
+  if(c.modifier.infinite) { setTimeout(startChallengeRound, 200/G.speed); return; }
+  // Continue to next stage
+  setTimeout(startChallengeRound, 300/G.speed);
+}
+
+function loseChallenge() {
+  challengeRunning = false;
+  const c = challengeData;
+  log('❌ 挑战结束！最高Stage：'+(G.challengesBest[c.id]||0), 'lose');
+  notif('挑战结束 最高：Stage '+(G.challengesBest[c.id]||0));
+  restartCombat();
+}
+
+function startWeeklyBoss(wb) {
+  if(!wb) return;
+  stopTimers();
+  const bossHP = Math.floor(stageEnemyHP(G.stage)*wb.hpMult);
+  let hp = bossHP;
+  let phase = 0;
+  const phases = [{at:0.66,msg:'⚡ 进入第二形态！'},{at:0.33,msg:'💥 最终形态！速度+1！'}];
+  log('━━ 👹 '+wb.icon+' '+wb.name+' HP:'+fmt(bossHP)+' ━━','boss');
+  const attackInterval = (1000/totalSpd())/G.speed;
+  const bI = setInterval(()=>{
+    if(hp<=0){
+      clearInterval(bI);
+      G.weeklyBossKills=(G.weeklyBossKills||0)+1;
+      const r=wb.reward;
+      if(r.crystals) earnGachaCrystals(r.crystals);
+      if(r.boss_core) G.upgMats.boss_core=(G.upgMats.boss_core||0)+r.boss_core;
+      if(r.mythic_shard) G.upgMats.mythic_shard=(G.upgMats.mythic_shard||0)+(r.mythic_shard||0);
+      if(r.gold) G.gold+=r.gold;
+      log('✅ 周常Boss击杀！💠×'+r.crystals+' 💀×'+(r.boss_core||0)+' 💰×'+fmt(r.gold||0),'boss');
+      notif('✅ 周常Boss击杀！','#c9a84c');
+      spawnParts('legendary'); shake();
+      checkAchs(); updateStats();
+      setTimeout(()=>restartCombat(), 1000/G.speed);
+      return;
+    }
+    const{dmg,isCrit}=calcDmg();
+    hp=Math.max(0,hp-dmg);
+    G.totalDmg+=dmg;
+    spawnDmg(dmg,isCrit,false);
+    // Phase transitions
+    if(phase<phases.length&&hp<=bossHP*(phases[phase].at)){
+      log(phases[phase].msg,'boss'); notif(phases[phase].msg); shake();
+      phase++;
+    }
+  }, attackInterval);
+  // Time limit
+  setTimeout(()=>{
+    if(hp>0){
+      clearInterval(bI);
+      log('❌ 周常Boss挑战失败！','lose');
+      notif('周常Boss挑战失败');
+      restartCombat();
+    }
+  }, (calcTimeLimit()+120)*1000/G.speed);
+}
+
+function stopChallenge() {
+  challengeRunning = false;
+  dungeonRunning = false;
+  restartCombat();
+}
+
+// ══════════════════════════════════════════════════
+//  OFFLINE INCOME (better version)
+// ══════════════════════════════════════════════════
+function processOffline() {
+  const now = Date.now();
+  const elapsed = Math.min((now - (G.lastSeen||now)) / 1000, 3600*12); // max 12 hours
+  if(elapsed < 60) return;
+  const gains = typeof calcOfflineGains==='function' ? calcOfflineGains(elapsed) : null;
+  if(!gains) return;
+  G.gold += gains.gold;
+  gainExp(gains.exp);
+  for(const[k,v] of Object.entries(gains.mats)) {
+    G.upgMats[k] = (G.upgMats[k]||0) + v;
+  }
+  const mins = Math.floor(elapsed/60);
+  const hours = Math.floor(mins/60);
+  const timeStr = hours>0 ? hours+'小时'+mins%60+'分' : mins+'分钟';
+  setTimeout(()=>{
+    const matStr = Object.entries(gains.mats)
+      .filter(([,v])=>v>0)
+      .map(([k,v])=>UPGRADE_MATS[k]?.icon+v)
+      .join(' ');
+    openModal('💤 离线收益',
+      '你离开了 '+timeStr+'\n\n获得：\n💰 '+fmt(gains.gold)+' 金币\n📖 '+fmt(gains.exp)+' EXP\n'+matStr,
+      [{label:'好的',cls:'m-ok',cb:closeModal}]);
+  }, 1200);
+}
+
 
 // ── DAILY/WEEKLY TASKS ────────────────────────────────────────
 function initTasks() {
@@ -503,6 +830,13 @@ function openBox(forced) {
 // ── NEW GEAR UPGRADE SYSTEM ───────────────────────────────────
 function initGear() {
   if(!G.gear) G.gear = makeInitialGear();
+  // Init team
+  if(!G.units||!G.units.length){
+    const warrior = makeUnit('warrior','战士');
+    warrior.gear = makeInitialGear();
+    G.units = [warrior];
+  }
+  calcTeamSynergies();
 }
 
 function choosePath(slot, pathId) {
@@ -537,8 +871,55 @@ function upgradeGear(slot, type='path') {
     g.pathLv = lv+1;
     recomputeGearStats(g); recalcEq(); updateStats();
     const rarInfo = gearRarity(g.pathLv);
+    G.upgradeCount=(G.upgradeCount||0)+1;
+    updateTaskProgress('upgradeCount',1);
     log(SLOT_ICON[slot]+' '+g.name+' Lv.'+g.pathLv+' → '+rarInfo.name+' ['+Object.entries(lvData).filter(([k])=>k!=='cost').map(([k,v])=>k.toUpperCase()+'+'+v).join(' ')+']','ev');
     checkAchs();
+  } else if(type==='reset'){
+    // Reset path choice — costs gold (scales with path level)
+    const resetCost = Math.max(1000, Math.floor(G.gold * 0.1 + (g.pathLv||0) * 500));
+    if(G.gold < resetCost){ notif('重置费用：'+fmt(resetCost)+' 金'); return; }
+    G.gold -= resetCost;
+    // Refund 50% of materials spent
+    const paths = GEAR_PATHS[slot];
+    const path = paths&&paths.find(p=>p.id===g.pathId);
+    if(path){
+      let refund=0;
+      for(let i=0;i<(g.pathLv||0);i++){ const lv=path.levels[i]; if(lv) refund+=Math.floor(lv.cost*0.5); }
+      if(refund>0){ G.upgMats[path.mat]=(G.upgMats[path.mat]||0)+refund; log('🔄 退还材料 '+refund+'x '+UPGRADE_MATS[path.mat].name,'ev'); }
+    }
+    g.pathId=null; g.pathLv=0; g.name=SLOT_NAME[slot];
+    recomputeGearStats(g); recalcEq(); updateStats();
+    log('🔄 '+SLOT_NAME[slot]+' 路线重置，花费'+fmt(resetCost)+'金','ev');
+    notif('路线已重置');
+    if(typeof renderGear==='function') renderGear();
+    return;
+  } else if(type==='evolve'){
+    // Gear evolution: reset path but grant ×2 permanent multiplier
+    const req=GEAR_EVOLUTION_REQ;
+    if((g.pathLv||0)<req.pathLv){ notif('需要路线Lv.'+req.pathLv); return; }
+    if((g.bossLv||0)<req.bossLv){ notif('需要Boss强化Lv.'+req.bossLv); return; }
+    g.evolutionMult=(g.evolutionMult||1)*GEAR_EVOLUTION_BONUS.mult;
+    g.evolutionCount=(g.evolutionCount||0)+1;
+    g.pathLv=0; g.bossLv=0;
+    g.pathId=null; // re-choose path
+    G.gearEvolutions=(G.gearEvolutions||0)+1;
+    recomputeGearStats(g); recalcEq(); updateStats();
+    log('🌅 '+SLOT_ICON[slot]+' '+SLOT_NAME[slot]+' 进化！属性×2，选择新路线','boss');
+    notif('🌅 装备进化！属性×2','#c9a84c');
+    checkAchs();
+    if(typeof renderGear==='function') renderGear();
+    return;
+  } else if(type==='mythic'){
+    if(G.awakenings<3){ notif('需要3次觉醒'); return; }
+    const mLv = g.mythicLv||0;
+    if(mLv>=MYTHIC_PATH.levels.length){ notif('神话路线已满'); return; }
+    const lvData = MYTHIC_PATH.levels[mLv];
+    if((G.upgMats.mythic_shard||0)<lvData.cost){ notif('需要 '+lvData.cost+'x 神话碎片'); return; }
+    G.upgMats.mythic_shard -= lvData.cost;
+    g.mythicLv = mLv+1;
+    recomputeGearStats(g); recalcEq(); updateStats();
+    log('🌠 神话路线 Lv.'+g.mythicLv+' +'+lvData.allPct+'%全属性 +真伤'+lvData.truePct+'%','ev');
   } else if(type==='boss'){
     const bLv = g.bossLv||0;
     if(bLv>=BOSS_PATH.levels.length){ notif('Boss强化已满'); return; }
@@ -611,6 +992,13 @@ function recomputeGearStats(g) {
       if(lv.cdmg) g.totalCdmg += lv.cdmg;
     }
   }
+  // Evolution multiplier (from gear evolution)
+  if(g.evolutionMult&&g.evolutionMult>1){
+    g.totalAtk=Math.floor(g.totalAtk*g.evolutionMult);
+    g.totalSpd=+((g.totalSpd*g.evolutionMult).toFixed(3));
+    g.totalCrit=+((g.totalCrit*g.evolutionMult).toFixed(2));
+    g.totalCdmg=Math.floor(g.totalCdmg*g.evolutionMult);
+  }
   // Boss path bonus (allPct)
   if(g.bossLv>0) {
     const bossLvs = g.bossLv;
@@ -625,9 +1013,33 @@ function recomputeGearStats(g) {
     g.totalCrit = +((g.totalCrit * mult).toFixed(2));
     g.totalCdmg = Math.floor(g.totalCdmg * mult);
   }
+  // Mythic path bonus
+  if(g.mythicLv&&g.mythicLv>0&&typeof MYTHIC_PATH!=='undefined'){
+    let mpct=0, mtrue=0;
+    for(let i=0;i<g.mythicLv;i++){
+      const lv=MYTHIC_PATH.levels[i]; if(!lv) break;
+      mpct+=lv.allPct; mtrue+=lv.truePct;
+    }
+    const mm=1+mpct/100;
+    g.totalAtk=Math.floor(g.totalAtk*mm);
+    g.totalSpd=+((g.totalSpd*mm).toFixed(3));
+    g.totalCrit=+((g.totalCrit*mm).toFixed(2));
+    g.totalCdmg=Math.floor(g.totalCdmg*mm);
+    g.mythicTruePct=mtrue;
+  }
   // Update rarity based on path level
   const rarInfo = gearRarity(g.pathLv||0);
-  g.rar = rarInfo.rar;
+  g.rar = g.mythicLv>0?'mythic':rarInfo.rar;
+}
+
+function calcTeamSynergies() {
+  if(!G.units||!G.units.length) return;
+  G.teamAtkMult=1; G.teamCdmgBonus=0; G.teamTruePct=0; G.teamAllMult=1; G.teamDoubleHit=0;
+  const active=G.units.filter(u=>u.unlocked);
+  if(typeof TEAM_SYNERGIES==='undefined') return;
+  TEAM_SYNERGIES.forEach(syn=>{
+    if(syn.req(active)) syn.apply();
+  });
 }
 
 function recalcSets() {
@@ -812,6 +1224,12 @@ function learnSkill(id) {
 
 // ── MILESTONES ────────────────────────────────────────────────
 function checkMilestone(stage) {
+  // Unit 2 unlock
+  if(stage===100&&!G.unit2Unlocked){
+    G.unit2Unlocked=true;
+    log('🎉 解锁第二角色！即将到来...','boss');
+    notif('🎉 Stage 100！第二角色解锁！','#c9a84c');
+  }
   const m=MILESTONES.find(x=>x.stage===stage);
   if(!m||G.milestonesDone.includes(stage)) return;
   G.milestonesDone.push(stage);
@@ -826,12 +1244,42 @@ function checkMilestone(stage) {
 }
 
 // ── ACHIEVEMENTS ─────────────────────────────────────────────
+function tryUnlockUnit(roleId) {
+  const req = UNIT_UNLOCK_REQS&&UNIT_UNLOCK_REQS[roleId];
+  if(!req) return;
+  if(G.best<req.stage||G.gold<req.gold){ notif('解锁条件：'+req.desc); return; }
+  const exists = G.units.some(u=>u.roleId===roleId);
+  if(exists){ notif('已解锁'); return; }
+  G.gold -= req.gold;
+  const unit = makeUnit(roleId);
+  unit.gear = makeInitialGear();
+  unit.unlocked = true;
+  G.units.push(unit);
+  calcTeamSynergies();
+  updateStats(); saveGame();
+  log('🎉 解锁新角色：'+unit.name,'boss');
+  notif('🎉 '+unit.name+' 已解锁！','#c9a84c');
+  if(typeof renderTeam==='function') renderTeam();
+}
+
 function checkAchs() {
   ACHS.forEach(a=>{
     if(!G.achs.includes(a.id)&&a.f()){
       G.achs.push(a.id); notif('🏅 '+a.n); log('🏅 成就：'+a.n,'ach');
     }
   });
+  // Title check
+  if(typeof TITLES!=='undefined'){
+    TITLES.forEach(t=>{
+      if(!(G.titlesEarned||[]).includes(t.id)&&t.req()){
+        if(!G.titlesEarned) G.titlesEarned=[];
+        G.titlesEarned.push(t.id);
+        if(!G.activeTitle) G.activeTitle=t.id;
+        log('📛 称号：'+t.icon+' '+t.name,'ach');
+        notif('📛 新称号：'+t.name,'#c9a84c');
+      }
+    });
+  }
 }
 
 // ── TALENT ───────────────────────────────────────────────────
@@ -859,37 +1307,57 @@ function unlockPassive(node) {
 }
 
 // ── TRAIN / REST ──────────────────────────────────────────────
+function trainCost() {
+  // Train cost scales with how much ATK you already have
+  return Math.max(10, Math.floor(G.baseAtk * 0.05 + G.trainN * 2));
+}
+
 function doTrain() {
+  const cost = trainCost();
+  if(G.gold < cost){ notif('金币不足 需要'+fmt(cost)); return; }
+  G.gold -= cost;
   G.trainN++;
-  let g=Math.ceil(totalAtk()*.05+1)+(G.pb.trainFlat||0);
-  if(G.spec==='atk') g=Math.ceil(g*2*(1+(G.pb.trainAtkMult||0)));
-  else g=Math.ceil(g*(1+(G.pb.trainAtkMult||0)));
-  // Resonance doubles talent bonuses on train
+  // ATK gain: small flat amount, grows slowly
+  let g = Math.ceil(totalAtk() * 0.02 + 1) + (G.pb.trainFlat||0);
+  if(G.spec==='atk') g = Math.ceil(g * 2 * (1+(G.pb.trainAtkMult||0)));
+  else g = Math.ceil(g * (1+(G.pb.trainAtkMult||0)));
+  // Warrior + titan synergy
+  if(G.spec==='atk'&&T.id==='titan') g=Math.ceil(g*1.5);
+  // Assassin: every 10 trains = crit+1%
+  if(G.spec==='crit'&&G.trainN%10===0) G.critChance+=1;
   if(hasSkill('resonance')&&T.onTrain) g*=2;
-  G.baseAtk+=g;
+  G.baseAtk += g;
   if(T.onTrain) T.onTrain();
-  // Battle will skill
   SKILLS.filter(s=>G.skills.includes(s.id)&&s.onTrain).forEach(s=>s.onTrain());
-  const sGain=G.spec==='spd'?0.2:0.1;
+  // SPD: every 10 trains
+  const sGain=G.spec==='spd'?0.1:0.05;
   let sLine='';
-  if(G.trainN%5===0){ G.atkSpd=Math.min(+(G.atkSpd+sGain).toFixed(1),spdCap()); sLine=' SPD+'+sGain; pop('s-spd'); restartCombat(); }
-  if(G.trainN%10===0){ G.critChance=Math.min(G.critChance+1,200); if(G.speed<=3) log('🎯 Crit+1%','ev'); pop('s-crit'); }
-  if(G.speed<=3) log('🏋 Train#'+G.trainN+' ATK+'+g+sLine,'ev');
-  pop('s-atk'); updateStats(); checkAchs();
+  if(G.trainN%10===0){ G.atkSpd=Math.min(+(G.atkSpd+sGain).toFixed(2),spdCap()); sLine=' SPD+'+sGain; pop('s-spd'); restartCombat(); }
+  // Crit: every 20 trains
+  if(G.trainN%20===0){ G.critChance=Math.min(G.critChance+1,200); if(G.speed<=3) log('🎯 Crit+1%','ev'); pop('s-crit'); }
+  if(G.speed<=3) log('🏋 Train ATK+'+g+sLine+' (-'+fmt(cost)+'金)','ev');
+  pop('s-atk'); pop('s-gold'); updateStats(); checkAchs();
   updateTaskProgress('trainN',1);
 }
+function restCost() {
+  return Math.max(50, Math.floor(G.stage * 5 + G.level * 3));
+}
+
 function doRest() {
+  const cost = restCost();
+  if(G.gold < cost){ notif('金币不足 需要'+fmt(cost)); return; }
+  G.gold -= cost;
+  // Rest gives small material/utility bonuses, NOT ATK
   const evs=[
-    ()=>{ const b=Math.floor(G.stage*10+G.level*5); G.gold+=b; log('✨ 宝藏 +'+fmt(b)+'金','ev'); pop('s-gold'); },
-    ()=>{ const b=Math.ceil(G.baseAtk*.1); G.baseAtk+=b; log('✨ 冥想 ATK+'+b,'ev'); pop('s-atk'); },
-    ()=>{ gainExp(G.expNeed*2); log('✨ 领悟 大量EXP','ev'); },
-    ()=>{ G.critDmg+=10; log('✨ 专注 CritDmg+10%','ev'); pop('s-cdmg'); },
-    ()=>{ G.mats.common=(G.mats.common||0)+2; log('✨ 拾取 普通碎片×2','ev'); },
-    ()=>{ G.critChance+=1; log('✨ 顿悟 Crit+1%','ev'); pop('s-crit'); },
-    ()=>{ if(G.gems.length<20) gainRandomGem(); },
+    ()=>{ const b=Math.floor(G.stage*3+1); G.upgMats.atk_stone=(G.upgMats.atk_stone||0)+b; log('✨ 休整 攻击石+'+b,'ev'); },
+    ()=>{ const b=Math.floor(G.stage*2+1); G.upgMats.spd_stone=(G.upgMats.spd_stone||0)+b; log('✨ 磨练 速度石+'+b,'ev'); },
+    ()=>{ const b=Math.floor(G.stage*2+1); G.upgMats.crit_stone=(G.upgMats.crit_stone||0)+b; log('✨ 专注 暴击石+'+b,'ev'); },
+    ()=>{ gainExp(Math.floor(G.expNeed*0.3)); log('✨ 领悟 EXP+30%','ev'); },
+    ()=>{ const b=Math.floor(G.stage*1+1); G.upgMats.def_stone=(G.upgMats.def_stone||0)+b; log('✨ 冥想 韧性石+'+b,'ev'); },
+    ()=>{ if((G.upgMats.boss_core||0)<5&&G.stage>=10){ G.upgMats.boss_core=(G.upgMats.boss_core||0)+1; log('✨ 感悟 Boss核心+1','ev'); } else { const b=Math.floor(G.stage*3+1); G.upgMats.atk_stone=(G.upgMats.atk_stone||0)+b; log('✨ 休整 攻击石+'+b,'ev'); } },
   ];
   evs[~~(Math.random()*evs.length)]();
-  updateStats();
+  pop('s-gold'); updateStats();
 }
 
 // ── EXP / LEVEL ───────────────────────────────────────────────
@@ -919,6 +1387,55 @@ G._berserkActive=false;
 function calcDmg() {
   let dmg=totalAtk();
   const pct=G.enemyMax>0?G.enemyHP/G.enemyMax:1;
+
+  // ── GEAR PATH IDENTITY ──
+  if(G.gear){
+    // ATK paths: every 5th hit = BURST (250% + screen shake + big number)
+    const atkPathLv = Math.max(0,...Object.values(G.gear)
+      .filter(g=>g.pathId==='w_atk'||g.pathId==='b_atk').map(g=>g.pathLv||0));
+    if(atkPathLv>=1){
+      G._atkHitCount=(G._atkHitCount||0)+1;
+      const burstEvery = Math.max(3, 5-Math.floor(atkPathLv/20)); // burst more often at higher lv
+      if(G._atkHitCount>=burstEvery){
+        G._atkHitCount=0;
+        const burstMult = 2.5 + atkPathLv*0.05; // scales with level
+        dmg=Math.floor(dmg*burstMult);
+        G._isBurst=true;
+        if(G.speed<=3) shake();
+      } else { G._isBurst=false; }
+    }
+
+    // SPD paths: every hit stacks 0.8% dmg, stack shows as meter, resets on stage clear
+    const spdPathLv = Math.max(0,...Object.values(G.gear)
+      .filter(g=>g.pathId==='w_spd'||g.pathId==='l_spd').map(g=>g.pathLv||0));
+    if(spdPathLv>=1){
+      const maxStack = 50 + spdPathLv*2;
+      G._spdStack=(G._spdStack||0)+1;
+      const stackBonus = Math.min(G._spdStack,maxStack)*(0.008+spdPathLv*0.0001);
+      dmg=Math.floor(dmg*(1+stackBonus));
+      // Update stack meter
+      try{ const sm=$('spd-stack-meter');
+        if(sm) sm.style.width=Math.min(100,G._spdStack/maxStack*100)+'%'; }catch(e){}
+    }
+
+    // CRIT paths: each crit multiplies the NEXT crit (exponential payoff)
+    const critPathLv = Math.max(0,...Object.values(G.gear)
+      .filter(g=>g.pathId==='h_crit'||g.pathId==='l_crit').map(g=>g.pathLv||0));
+    if(critPathLv>=1){
+      G._critChain=G._critChain||0;
+      if(isCrit){
+        G._critChain++;
+        const chainMult = 1 + G._critChain*(0.15+critPathLv*0.002);
+        dmg=Math.floor(dmg*chainMult);
+        if(G._critChain>=5&&G.speed<=3) log('⚡ '+G._critChain+'连暴击链 ×'+chainMult.toFixed(1),'ev');
+      } else {
+        G._critChain=0;
+      }
+    }
+  }
+
+  // Boss phase ATK multiplier (player gets stronger when boss phases)
+  if(G.isBoss&&G.bossAtkMult&&G.bossAtkMult>1) dmg=Math.floor(dmg*G.bossAtkMult);
   // Executioner talent
   if(T.id==='executioner'&&T.dmgMult) dmg=Math.floor(dmg*T.dmgMult(pct));
   // Affix: thunder
@@ -957,13 +1474,32 @@ function startFight() {
   G.isBoss=eType.id==='boss';
   G.timeLimit=calcTimeLimit()+(G.isBoss?30:eType.id==='miniboss'?15:0);
   const baseHP=Math.floor(50*Math.pow(1.08,G.stage-1));
-  G.enemyMax=Math.floor(baseHP*eType.hpMult);
+  const zone=typeof getZone==='function'?getZone(G.stage):{enemyMult:1};
+  const scaledHP=typeof stageEnemyHP==='function'?stageEnemyHP(G.stage):baseHP;
+  G.enemyMax=Math.floor(scaledHP*eType.hpMult*zone.enemyMult);
   G.enemyHP=G.enemyMax;
   G.timeEl=0; G.totalDmgFight=0; G.dpsAccum=0; G.dpsTimer=0;
   G.enemyPhased=false;
+  G.bossPhasesDone=0;
+  G.bossAtkMult=1;
   // Elite shield
   G.enemyShield=eType.id==='elite'?Math.floor(G.enemyMax*eType.shieldPct):0;
   G._berserkActive=false;
+  if(typeof updateZoneBadge==='function') updateZoneBadge();
+  if(typeof updateBattleScene==='function') updateBattleScene();
+  if(typeof updateBossPhaseGlow==='function') updateBossPhaseGlow();
+
+  // Stage modifier — every 7 stages roll a random modifier
+  if(typeof STAGE_MODIFIERS!=='undefined'&&G.stage%7===0&&!G.isBoss){
+    G.currentMod=STAGE_MODIFIERS[~~(Math.random()*STAGE_MODIFIERS.length)];
+    G.stageModCount=(G.stageModCount||0)+1;
+    log('🎲 关卡修正：'+G.currentMod.icon+' '+G.currentMod.name+' — '+G.currentMod.desc,'ev');
+    notif(G.currentMod.icon+' '+G.currentMod.name);
+    if(G.currentMod.shieldPct) G.enemyShield=Math.floor(G.enemyMax*G.currentMod.shieldPct);
+    if(G.currentMod.apply) G.enemyMax=G.currentMod.apply(G.enemyMax);
+    if(G.currentMod.applyTime) G.timeLimit=G.currentMod.applyTime(G.timeLimit);
+    if(G.currentMod.hpMult) G.enemyMax=Math.floor(G.enemyMax*(G.currentMod.hpMult||1));
+  } else if(G.stage%7!==0) { G.currentMod=null; }
 
   // Skill: revenge — activate effect
   SKILLS.filter(s=>G.skills.includes(s.id)&&s.onFightStart).forEach(s=>s.onFightStart());
@@ -983,18 +1519,27 @@ function startFight() {
     badge.textContent='小Boss！'; badge.className='boss';
     log('━━ 💀 小Boss Stage '+G.stage+' HP:'+fmt(G.enemyMax)+' ━━','ev');
   } else {
-    sn.textContent='Stage '+G.stage+(G.stage%25===0?' ⭐':'');
+    const zone=typeof getZone==='function'?getZone(G.stage):{name:'',icon:'',enemyMult:1};
+    G.currentZone=zone.name;
+    sn.textContent=zone.icon+' Stage '+G.stage+(G.stage%25===0?' ⭐':'');
     badge.textContent='进攻中'; badge.className=''; hpbar.className='bar-fill';
-    if(G.speed<=3) log('━━ Stage '+G.stage+' HP:'+fmt(G.enemyMax)+' ━━','sys');
+    if(G.speed<=3) log('━━ '+zone.icon+zone.name+' Stage '+G.stage+' HP:'+fmt(G.enemyMax)+' ━━','sys');
   }
 }
 
 function restartCombat() { stopTimers(); startFight(); runTimers(); }
 
 function runTimers() {
+  // Multi-unit attack rotation
+  const activeUnits = G.units?G.units.filter(u=>u.unlocked):[];
+  const unitCount = Math.max(1, activeUnits.length);
   const atkMs=(1000/totalSpd())/G.speed;
   atkI=setInterval(()=>{
     if(G.enemyHP<=0) return;
+    // Cycle through units
+    G.activeUnit = (G.activeUnit||0) % unitCount;
+    const currentUnit = activeUnits[G.activeUnit] || null;
+    G.activeUnit++;
     const { dmg:baseDmg, isCrit, special } = calcDmg();
     let totalHit=baseDmg;
 
@@ -1055,27 +1600,58 @@ function runTimers() {
       SKILLS.filter(s=>G.skills.includes(s.id)&&s.onNormal).forEach(s=>s.onNormal());
     }
 
+    // Destruction passives
+    if(G.pb.judgement){
+      G._judgeCtr=(G._judgeCtr||0)+1;
+      if(G._judgeCtr>=G.pb.judgement){ G._judgeCtr=0; const jd=Math.floor(totalHit*3); G.enemyHP=Math.max(0,G.enemyHP-jd); G.totalDmgFight+=jd; if(G.speed<=3)log('⚡ 末日审判 -'+fmt(jd),'skill'); }
+    }
+    if(G.pb.godStrike){
+      G._godCtr=(G._godCtr||0)+1;
+      if(G._godCtr>=G.pb.godStrike){ G._godCtr=0; const gd=Math.floor(totalHit*50); G.enemyHP=Math.max(0,G.enemyHP-gd); G.totalDmgFight+=gd; log('✋ 神之一击 -'+fmt(gd),'skill'); }
+    }
+    if(G.pb.critTruePct&&isCrit){ const ct=Math.floor(G.enemyMax*G.pb.critTruePct); G.enemyHP=Math.max(0,G.enemyHP-ct); G.totalDmgFight+=ct; }
+    if(G.pb.splitChance&&Math.random()<G.pb.splitChance){ const sd=Math.floor(totalHit); G.enemyHP=Math.max(0,G.enemyHP-sd); G.totalDmgFight+=sd; }
+    if(G.pb.truePct){ const tp=Math.floor(G.enemyMax*(G.pb.truePct||0)); G.enemyHP=Math.max(0,G.enemyHP-tp); G.totalDmgFight+=tp; }
+    // Team double hit synergy
+    if(G.teamDoubleHit&&Math.random()<G.teamDoubleHit){
+      const tdh=Math.floor(totalAtk()*0.7); G.enemyHP=Math.max(0,G.enemyHP-tdh);
+      G.totalDmgFight+=tdh; G.totalDmg+=tdh;
+    }
     // Passive: double hit
     if(G.pb.doubleHit&&Math.random()<G.pb.doubleHit){
       const ex=Math.floor(totalAtk()*0.6); G.enemyHP=Math.max(0,G.enemyHP-ex);
       G.totalDmgFight+=ex; G.totalDmg+=ex;
     }
 
-    // Combo system
+    // Combo system — combo stacks multiply damage
     if(isCrit){
       G.combo++; if(G.combo>G.bestCombo) G.bestCombo=G.combo;
-      if(G.combo>=5&&G.combo%5===0){ log('🔥 '+G.combo+'连暴击','combo'); flashCombo(G.combo); }
+      if(G.combo>=5&&G.combo%5===0){ log('🔥 '+G.combo+'连暴击！伤害×'+(1+G.combo*0.05).toFixed(1),'combo'); flashCombo(G.combo); }
       G.crits++; updateTaskProgress('crits',1);
-    } else { G.combo=0; }
+    } else {
+      if(G.combo>=10) log('💔 连击中断 '+G.combo+'连','sys');
+      G.combo=0;
+    }
     $('l-combo').textContent='×'+G.combo;
+    // Apply combo bonus to totalHit retroactively
+    if(G.combo>1) totalHit=Math.floor(totalHit*(1+Math.min(G.combo,50)*0.02));
 
-    // Boss phase at 50% HP
-    if(G.isBoss&&!G.enemyPhased&&G.enemyHP<=G.enemyMax*0.5){
-      G.enemyPhased=true;
-      G.enemyMax=Math.floor(G.enemyMax*1.5); // boss gets stronger
-      log('👑 BOSS进入狂暴阶段！HP和ATK大幅提升！','boss');
-      notif('👑 Boss狂暴！');
-      shake();
+    // Multi-phase boss system
+    if(G.isBoss&&typeof BOSS_PHASE_CONFIG!=='undefined'){
+      const phasedSoFar=G.bossPhasesDone||0;
+      const remainingPhases=BOSS_PHASE_CONFIG.slice(phasedSoFar);
+      for(const phase of remainingPhases){
+        const threshold=G.enemyMax*(phase.at+(phasedSoFar*0.001)); // slight offset per phase
+        if(G.enemyHP<=threshold&&G.enemyHP>0){
+          G.bossPhasesDone=(G.bossPhasesDone||0)+1;
+          G.bossAtkMult=(G.bossAtkMult||1)*phase.atkMult;
+          if(phase.shieldPct) G.enemyShield=Math.floor(G.enemyMax*phase.shieldPct);
+          if(phase.timeCut) G.timeLimit=Math.ceil(G.timeLimit*phase.timeCut);
+          log(phase.msg,'boss'); notif(phase.name+'！','#c9a84c'); shake(); spawnParts('boss');
+          if(typeof updateBossPhaseGlow==='function') updateBossPhaseGlow();
+          break;
+        }
+      }
     }
 
     // Mini-boss regen
@@ -1085,6 +1661,8 @@ function runTimers() {
     }
 
     spawnDmg(totalHit, isCrit, special||skillLabel!=='');
+    if(typeof triggerAttackAnim==='function') triggerAttackAnim();
+    if(typeof triggerEnemyHurt==='function') triggerEnemyHurt();
     if(skillLabel&&G.speed<=3) log(skillLabel+' -'+fmt(totalHit),'skill');
     else if(G.speed<=2){
       if(special) log('🌩 -'+fmt(totalHit),'ev');
@@ -1116,7 +1694,13 @@ function runTimers() {
   // DPS
   dpsI=setInterval(()=>{
     G.dpsTimer++;
-    if(G.dpsTimer>=1){ G.currentDPS=Math.floor(G.dpsAccum/G.dpsTimer); $('l-dps').textContent=fmt(G.currentDPS); }
+    if(G.dpsTimer>=1){
+      G.currentDPS=Math.floor(G.dpsAccum/G.dpsTimer);
+      $('l-dps').textContent=fmt(G.currentDPS);
+      $('l-dps-card')&&($('l-dps-card').textContent=fmt(G.currentDPS));
+      // Gold per sec passive
+      if(G.pb&&G.pb.goldPerSec){ G.gold+=Math.floor(G.stage*2+1); }
+    }
   }, 1000/G.speed);
 
   // Berserk rush skill
@@ -1138,13 +1722,48 @@ function updateCombatUI() {
   $('time-bar').style.width=tP+'%';
   $('time-txt').textContent=(G.timeLimit-G.timeEl)+'s';
   $('tdmg').textContent=fmt(G.totalDmgFight);
-  // Shield bar
   const shBar=$('shield-bar-row');
   if(shBar){ shBar.style.display=G.enemyShield>0?'flex':'none'; if(G.enemyShield>0){ $('shield-bar').style.width=Math.max(0,G.enemyShield/G.enemyMax*100)+'%'; $('shield-txt').textContent=fmt(G.enemyShield); } }
+  // Build meters
+  try{
+    if(G.gear){
+      const hasSpdPath=Object.values(G.gear).some(g=>g.pathId==='w_spd'||g.pathId==='l_spd');
+      const spdRow=$('spd-stack-row');
+      if(spdRow){ spdRow.style.display=hasSpdPath?'flex':'none';
+        if(hasSpdPath){ $('spd-stack-count').textContent=G._spdStack||0; } }
+
+      const hasCritPath=Object.values(G.gear).some(g=>g.pathId==='h_crit'||g.pathId==='l_crit');
+      const critRow=$('crit-chain-row');
+      if(critRow){ critRow.style.display=hasCritPath?'flex':'none';
+        if(hasCritPath){
+          const chain=G._critChain||0;
+          $('crit-chain-count').textContent='×'+(1+chain*0.15).toFixed(1);
+          const dots=$('crit-chain-dots');
+          if(dots){ dots.innerHTML=''; for(let i=0;i<Math.min(chain,10);i++){ const d=document.createElement('div'); d.style.cssText='width:6px;height:6px;border-radius:50%;background:var(--gold2);'; dots.appendChild(d); } }
+        }
+      }
+
+      const hasAtkPath=Object.values(G.gear).some(g=>g.pathId==='w_atk'||g.pathId==='b_atk');
+      const atkRow=$('atk-burst-row');
+      if(atkRow){ atkRow.style.display=hasAtkPath?'flex':'none';
+        if(hasAtkPath){
+          const atkPathLv=Math.max(0,...Object.values(G.gear).filter(g=>g.pathId==='w_atk'||g.pathId==='b_atk').map(g=>g.pathLv||0));
+          const burstEvery=Math.max(3,5-Math.floor(atkPathLv/20));
+          const cnt=G._atkHitCount||0;
+          $('atk-burst-meter').style.width=(cnt/burstEvery*100)+'%';
+          $('atk-burst-label').textContent=cnt+'/'+burstEvery;
+        }
+      }
+    }
+  }catch(e){}
 }
 
 function onWin() {
   stopTimers();
+  G._spdStack=0; // SPD path stack resets each fight
+  G._critChain=0;
+  G._atkHitCount=0;
+  G._isBurst=false;
   G.wins++; G.streak++; G.combo=0;
   if(G.streak>G.bestStreak) G.bestStreak=G.streak;
   const eType=getEnemyType(G.stage);
@@ -1174,7 +1793,8 @@ function onWin() {
   const streakBonus=1+Math.min(G.streak*0.02,0.5);
   let gMult=1+(G.pb.goldMult||0)+(G._goldPctBonus||0)/100;
   if(T.goldMult) gMult*=T.goldMult;
-  const g=Math.floor(G.stage*5*(1+Math.random())*eType.gMult*gMult*streakBonus);
+  const earlyGold = G.stage<20?3:G.stage<50?2:1;
+  const g=Math.floor(G.stage*8*(1+Math.random())*eType.gMult*gMult*streakBonus*earlyGold);
   G.gold+=g; G.goldEarned+=g;
   log('💰 +'+fmt(g)+(G.streak>=5?' (连胜+'+Math.floor((streakBonus-1)*100)+'%)':''),'loot');
   pop('s-gold');
@@ -1183,18 +1803,48 @@ function onWin() {
   gainExp(Math.floor(G.stage*(G.isBoss?5:2)*eType.gMult));
 
   // ── NEW: Drop upgrade materials (no item drops) ──
-  dropUpgradeMats(G.stage, G.isBoss, G.enemyType);
+  // Early stages drop more mats to get players going
+  const matMult = G.stage<20?3:G.stage<50?2:1;
+  for(let m=0;m<matMult;m++) dropUpgradeMats(G.stage, G.isBoss, G.enemyType);
   // Elite bonus mats
   if(G.enemyType==='elite'){
-    G.upgMats.atk_stone=(G.upgMats.atk_stone||0)+1;
-    G.upgMats.crit_stone=(G.upgMats.crit_stone||0)+1;
+    G.upgMats.atk_stone=(G.upgMats.atk_stone||0)+2;
+    G.upgMats.crit_stone=(G.upgMats.crit_stone||0)+2;
+    G.upgMats.spd_stone=(G.upgMats.spd_stone||0)+1;
   }
   // Boss: guaranteed boss_core drop
   if(G.isBoss){
-    const bCores = 1+Math.floor(G.stage/20);
+    const bCores = 2+Math.floor(G.stage/10);
     G.upgMats.boss_core=(G.upgMats.boss_core||0)+bCores;
     log('💀 Boss核心 ×'+bCores,'loot');
-    if(G.stage>=50&&Math.random()<0.1){
+    // Earn gacha crystals from boss kills
+    const crystalEarn = 5+Math.floor(G.stage/10)*2;
+    earnGachaCrystals(crystalEarn);
+    if(G.stage%10===0) log('💠 +'+crystalEarn+' 传说水晶','loot');
+    // Rune drop from boss
+    if(typeof RUNES!=='undefined'&&Math.random()<RUNE_DROP_CHANCE){
+      const tier = G.stage<50?1:G.stage<200?2:G.stage<500?3:4;
+      const pool = RUNES.filter(r=>r.tier<=tier);
+      const rune = pool[~~(Math.random()*pool.length)];
+      if(rune){
+        if(!G.runeInventory) G.runeInventory=[];
+        G.runeInventory.push(rune.id);
+        log('✨ 符文掉落：'+rune.icon+' '+rune.name+' ('+rune.desc+')','loot');
+        notif('✨ 符文：'+rune.name);
+      }
+    }
+    // Weekly boss check + auto-start
+    const thisWeek=getWeekKey();
+    if(G.stage>=10&&G.stage%25===0&&G.lastWeeklyBoss!==thisWeek&&typeof WEEKLY_BOSS_STAGES!=='undefined'){
+      const wb=WEEKLY_BOSS_STAGES.slice().reverse().find(b=>G.stage>=b.minStage);
+      if(wb){
+        G.lastWeeklyBoss=thisWeek;
+        log('👹 周常Boss '+wb.icon+' '+wb.name+' 出现！','boss');
+        notif('👹 '+wb.name+' 出现！','#c9a84c');
+        setTimeout(()=>startWeeklyBoss(wb), 1500/G.speed);
+      }
+    }
+    if(G.stage>=30&&Math.random()<0.15){
       G.upgMats.mythic_shard=(G.upgMats.mythic_shard||0)+1;
       log('🌠 神话碎片 ×1','loot');
     }
@@ -1204,18 +1854,38 @@ function onWin() {
   if(G.stage>G.best) G.best=G.stage;
   checkMilestone(G.stage-1);
   pop('s-stage'); updateStats(); checkAchs();
+  if(typeof updatePersonalBests==='function') updatePersonalBests();
+  if(typeof showGachaTabIfUnlocked==='function') showGachaTabIfUnlocked();
+  if(typeof showDungeonTabIfUnlocked==='function') showDungeonTabIfUnlocked();
   updateTaskProgress('wins',1);
   updateTaskProgress('bossKills', G.isBoss?1:0);
   updateTaskProgress('stage', G.stage);
 
   recalcSets(); renderEquip();
+  // Update equip tab indicator
+  try{
+    const dot=$('equip-dot');
+    if(dot){
+      const hasUpgrade=G.gear&&Object.values(G.gear).some(g=>{
+        if(!g.pathId) return true; // path not chosen yet
+        const paths=GEAR_PATHS[g.slot];
+        const path=paths&&paths.find(p=>p.id===g.pathId);
+        if(!path) return false;
+        const lv=g.pathLv||0;
+        if(lv>=path.levels.length) return false;
+        return (G.upgMats[path.mat]||0)>=(path.levels[lv].cost||1);
+      });
+      dot.style.display=hasUpgrade?'inline-block':'none';
+    }
+  }catch(e){}
   setTimeout(()=>{ startFight(); runTimers(); }, Math.max(150,500/G.speed));
 }
 
 function onLose() {
   stopTimers(); G.combo=0;
-  // Eternal will skill: 30% chance no retreat
-  if(hasSkill('eternal_will')&&Math.random()<SKILLS.find(s=>s.id==='eternal_will').noRetrocChance){
+  // No-retreat passives (eternal_will skill + endurance passive)
+  const noRetroChance=(hasSkill('eternal_will')?SKILLS.find(s=>s.id==='eternal_will').noRetrocChance:0)+(G.pb.noRetro||0);
+  if(noRetroChance>0&&Math.random()<noRetroChance){
     log('🛡 永恒意志！不退关，重新挑战','skill');
     G.streak=0; G.fights++;
     startFight(); runTimers(); return;
@@ -1242,6 +1912,25 @@ function updateStats() {
   $('l-combo').textContent='×'+G.combo;
   $('l-streak').textContent=G.streak+(G.streak>=5?'🔥':'');
   $('l-power')&&($('l-power').textContent=fmt(powerScore()));
+  // Show cheapest available upgrade cost as a hint
+  try{
+    if(G.gear){
+      let minCost=Infinity, minMat='';
+      for(const g of Object.values(G.gear)){
+        const paths=GEAR_PATHS[g.slot];
+        if(!g.pathId){ minCost=0; minMat='选路线'; break; }
+        const path=paths&&paths.find(p=>p.id===g.pathId);
+        if(!path) continue;
+        const lv=g.pathLv||0;
+        if(lv>=path.levels.length) continue;
+        const cost=path.levels[lv].cost;
+        const have=G.upgMats[path.mat]||0;
+        if(cost<minCost){ minCost=cost; minMat=UPGRADE_MATS[path.mat].icon+cost; }
+      }
+      const hint=$('upgrade-hint');
+      if(hint) hint.textContent=minCost===0?'⬆ 选路线':minCost===Infinity?'✅ 全满':'下次强化: '+minMat;
+    }
+  }catch(e){}
   // Full stats
   $('d-atk')&&($('d-atk').textContent=fmt(totalAtk()));
   $('d-atk-b')&&($('d-atk-b').textContent=fmt(G.baseAtk)+'/'+fmt(G.eqAtk)+'/'+fmt(Math.floor(G.tAtk)));
@@ -1264,6 +1953,15 @@ function updateStats() {
   $('cur-reforge')&&($('cur-reforge').textContent=G.currencies.reforge||0);
   $('cur-essence')&&($('cur-essence').textContent=G.currencies.essence||0);
   $('cur-catalyst')&&($('cur-catalyst').textContent=G.currencies.catalyst||0);
+  // Train/rest cost hints
+  try{
+    const tc=$('train-cost-hint'); if(tc&&typeof trainCost==='function') tc.textContent='花费 '+fmt(trainCost())+' 金';
+    const rc=$('rest-cost-hint');  if(rc&&typeof restCost==='function')  rc.textContent='花费 '+fmt(restCost())+' 金';
+    const sg=$('shop-gold-display'); if(sg) sg.textContent=fmt(G.gold);
+  }catch(e){}
+  // Title + auto-upgrade UI (in index.html)
+  if(typeof updateAutoUpgUI==='function') updateAutoUpgUI();
+  if(typeof updateActiveTitle==='function') updateActiveTitle();
 }
 
 // ── SPEED / AUTO ──────────────────────────────────────────────
@@ -1307,6 +2005,9 @@ function initGame() {
       log('每10关Boss · 每5关精英怪 · 装备页选择强化路线','sys');
     }
     startFight(); runTimers(); checkAchs();
+    if(typeof initBattleScene==='function') initBattleScene();
+    if(typeof showGachaTabIfUnlocked==='function') showGachaTabIfUnlocked();
+  if(typeof showDungeonTabIfUnlocked==='function') showDungeonTabIfUnlocked();
   } catch(e) {
     console.error('initGame crash:', e);
     // Hard reset if corrupt save

@@ -12,7 +12,10 @@
 
   <!-- HEADER -->
   <div id="header">
-    <div id="game-title">CHRONICLE</div>
+    <div>
+      <div id="game-title">CHRONICLE</div>
+      <div id="active-title" style="font-size:.44rem;color:var(--violet2);letter-spacing:.08em"></div>
+    </div>
     <div id="header-right">
       <div id="save-dot"></div>
       <div id="save-time">未保存</div>
@@ -36,12 +39,14 @@
 
   <!-- TABS -->
   <div id="tabs">
-    <div class="tab on"  onclick="goTab(this,'main')">⚔ 战斗</div>
-    <div class="tab"     onclick="goTab(this,'equip')">🛡 装备</div>
-    <div class="tab"     onclick="goTab(this,'skills')">📚 技能</div>
-    <div class="tab"     onclick="goTab(this,'tasks')">📅 任务</div>
-    <div class="tab"     onclick="goTab(this,'shop')">🛒 商店</div>
-    <div class="tab"     onclick="goTab(this,'stats')">📊 数据</div>
+    <div class="tab on" onclick="goTab(this,'main')">⚔ 战斗</div>
+    <div class="tab"    onclick="goTab(this,'equip')">🛡 装备<span id="equip-dot" style="display:none;width:5px;height:5px;background:var(--jade2);border-radius:50%;display:inline-block;margin-left:3px;vertical-align:middle;box-shadow:0 0 5px var(--jade2);"></span></div>
+    <div class="tab"    id="dungeon-tab" style="display:none" onclick="goTab(this,'dungeon')">⚔ 副本</div>
+    <div class="tab"    id="rune-tab"    style="display:none" onclick="goTab(this,'rune')">✨ 符文</div>
+    <div class="tab"    id="gacha-tab" style="display:none" onclick="goTab(this,'gacha')">💠 祈愿</div>
+    <div class="tab"    onclick="goTab(this,'stats')">📊 数据</div>
+    <div class="tab"    id="team-tab" onclick="goTab(this,'team')">👥 队伍</div>
+    <div class="tab"    onclick="goTab(this,'settings')">⚙ 设置</div>
   </div>
 
   <!-- ══ MAIN PAGE ══ -->
@@ -67,10 +72,37 @@
       <div class="lc"><div class="ll2">POWER</div>  <div class="lv" style="color:var(--violet2)" id="l-power">0</div></div>
       <div id="spec-pill">无专精</div>
     </div>
+    <div id="upgrade-hint-bar" style="flex-shrink:0;padding:3px 12px;background:rgba(58,158,110,.06);border-bottom:1px solid var(--bd);font-size:.55rem;color:var(--jade2);text-align:center;letter-spacing:.06em;">
+      <span id="upgrade-hint">加载中...</span>
+    </div>
+
+    <!-- ── PIXEL BATTLE SCENE ── -->
+    <div id="battle-scene">
+      <div id="scene-bg" class="zone-plains"></div>
+      <div id="scene-ground"></div>
+      <!-- Player sprite (CSS box-shadow pixel art) -->
+      <div class="sprite" id="sprite-player"></div>
+      <!-- Enemy sprite -->
+      <div class="sprite" id="sprite-enemy"></div>
+      <!-- Boss sprite (hidden when not boss) -->
+      <div class="sprite" id="sprite-boss" style="display:none"></div>
+      <!-- HP bars -->
+      <div class="sprite-hp-bar" id="player-sprite-hp" style="display:none">
+        <div class="sprite-hp-fill" id="player-sprite-hp-fill"></div>
+      </div>
+      <!-- Attack slash -->
+      <div id="attack-slash">⚡</div>
+      <!-- Zone decorations -->
+      <div class="zone-deco" id="deco-left"></div>
+      <div class="zone-deco" id="deco-right"></div>
+    </div>
 
     <div id="combat-card">
       <div id="combat-top">
-        <div id="stage-name">Stage 1</div>
+        <div>
+          <div id="zone-badge" style="font-size:.46rem;color:var(--tx3);margin-bottom:1px"></div>
+          <div id="stage-name">Stage 1</div>
+        </div>
         <div id="combat-badge">进攻中</div>
       </div>
       <div class="bar-row">
@@ -86,8 +118,30 @@
         <div class="bar-t"><div class="bar-f" id="time-bar" style="width:100%"></div></div>
       </div>
       <div id="dmg-row">
-        <span>Total: <span id="tdmg">0</span></span>
-        <span id="log-dps" style="color:var(--ember2)"></span>
+        <span style="color:var(--tx3)">累计: <span id="tdmg" style="color:var(--tx)">0</span></span>
+        <span style="color:var(--ember2);font-weight:700;font-size:.6rem">DPS <span id="l-dps-card">0</span></span>
+      </div>
+      <!-- Build identity meters -->
+      <div id="build-meters" style="margin-top:4px;display:flex;flex-direction:column;gap:2px;">
+        <div id="spd-stack-row" style="display:none;align-items:center;gap:5px;font-size:.5rem;color:var(--jade2)">
+          <span>SPD叠层</span>
+          <div style="flex:1;height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden">
+            <div id="spd-stack-meter" style="height:100%;width:0%;background:linear-gradient(90deg,var(--jade),var(--jade2));transition:width .1s;border-radius:2px;"></div>
+          </div>
+          <span id="spd-stack-count">0</span>
+        </div>
+        <div id="crit-chain-row" style="display:none;align-items:center;gap:5px;font-size:.5rem;color:var(--gold2)">
+          <span>暴击链</span>
+          <div style="flex:1;display:flex;gap:2px;" id="crit-chain-dots"></div>
+          <span id="crit-chain-count">×1</span>
+        </div>
+        <div id="atk-burst-row" style="display:none;align-items:center;gap:5px;font-size:.5rem;color:var(--ember2)">
+          <span>爆发</span>
+          <div style="flex:1;height:3px;background:rgba(255,255,255,.05);border-radius:2px;overflow:hidden">
+            <div id="atk-burst-meter" style="height:100%;width:0%;background:linear-gradient(90deg,var(--ember),var(--ember2));border-radius:2px;transition:width .15s;"></div>
+          </div>
+          <span id="atk-burst-label">-</span>
+        </div>
       </div>
     </div>
 
@@ -103,12 +157,12 @@
       <button class="act-btn" id="btn-train" onclick="doTrain()">
         <span class="icon">💪</span>
         <span class="name">Train</span>
-        <span class="hint">永久强化属性</span>
+        <span class="hint" id="train-cost-hint">花费金币强化ATK</span>
       </button>
       <button class="act-btn" id="btn-rest" onclick="doRest()">
         <span class="icon">✨</span>
         <span class="name">Rest</span>
-        <span class="hint">随机增益恢复</span>
+        <span class="hint" id="rest-cost-hint">花费金币获得材料</span>
       </button>
     </div>
   </div>
@@ -117,8 +171,23 @@
   <div class="page" id="equip-page">
     <!-- Material stockpile -->
     <div id="mat-stockpile" style="flex-shrink:0;padding:6px 8px;display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--bd);"></div>
+    <!-- Auto-upgrade controls -->
+    <div id="auto-upg-bar" style="flex-shrink:0;padding:5px 8px;border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="font-size:.52rem;color:var(--tx3)">自动:</span>
+      <button onclick="setAutoUpgrade('off')"      id="au-off"      class="inv-act au-btn">关闭</button>
+      <button onclick="setAutoUpgrade('cheapest')" id="au-cheapest" class="inv-act au-btn">最便宜</button>
+      <button onclick="setAutoUpgrade('balanced')" id="au-balanced" class="inv-act au-btn">均衡</button>
+      <span style="font-size:.5rem;color:var(--tx3);margin-left:auto">已自动强化:<span id="au-count">0</span>次</span>
+    </div>
     <!-- Gear cards (rendered by JS) -->
-    <div id="gear-list" style="flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:6px;"></div>
+    <div id="gear-list" style="flex:1;overflow-y:auto;padding:6px 8px;display:flex;flex-direction:column;gap:6px;">
+    </div>
+    <!-- Unit 2 teaser (shown after Stage 100) -->
+    <div id="unit2-teaser" style="display:none;flex-shrink:0;margin:0 8px 8px;padding:12px;background:rgba(139,92,246,.05);border:1px dashed rgba(139,92,246,.3);border-radius:10px;text-align:center;">
+      <div style="font-size:1.5rem;margin-bottom:4px">🔒</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:.9rem;color:var(--violet2)">第二角色</div>
+      <div style="font-size:.58rem;color:var(--tx3);margin-top:3px">到达 Stage 100 解锁</div>
+    </div>
   </div>
 
   <!-- ══ SKILLS PAGE ══ -->
@@ -134,58 +203,55 @@
   <!-- ══ SHOP PAGE ══ -->
   <div class="page" id="shop-page">
     <div id="shop-hdr">
-      <div id="shop-title">商店</div>
+      <div>
+        <div id="shop-title">商店</div>
+        <div style="font-size:.52rem;color:var(--gold);margin-top:1px">💰 <span id="shop-gold-display">0</span></div>
+      </div>
       <button id="btn-refresh-shop" onclick="refreshShop()">刷新 · 500金</button>
     </div>
     <div id="shop-list"></div>
+    <!-- Material Sinks section -->
+    <div style="flex-shrink:0;padding:6px 10px;border-top:1px solid var(--bd);font-family:'Cormorant Garamond',serif;font-size:.82rem;color:var(--gold);">⚗ 材料炼制</div>
+    <div id="mat-sink-list" style="flex:0;overflow-y:auto;max-height:220px;padding:5px 8px;display:flex;flex-direction:column;gap:4px;border-top:1px solid var(--bd);"></div>
   </div>
 
   <!-- ══ STATS PAGE ══ -->
   <div class="page" id="stats-page">
     <div id="stats-scroll">
 
-      <!-- Awakening -->
-      <div id="awaken-section">
-        <div id="awaken-title">🌅 觉醒系统</div>
-        <div id="awaken-req">加载中...</div>
-        <button id="awaken-btn" onclick="confirmAwaken()" disabled>觉醒</button>
+      <!-- Core Numbers — always first -->
+      <div class="panel">
+        <div class="panel-title">战力</div>
+        <div style="text-align:center;padding:8px 0">
+          <div style="font-family:'Cormorant Garamond',serif;font-size:2rem;font-weight:700;color:var(--gold)" id="d-power">0</div>
+          <div style="font-size:.52rem;color:var(--tx3);margin-top:2px">综合战力评分</div>
+        </div>
+        <div class="data-row"><span class="dk">总ATK</span>              <span class="dv" id="d-atk">10</span></div>
+        <div class="data-row"><span class="dk">基础 / 装备 / 天赋</span> <span class="dv" id="d-atk-b">-</span></div>
+        <div class="data-row"><span class="dk">攻速 / 上限</span>        <span class="dv" id="d-spd">-</span></div>
+        <div class="data-row"><span class="dk">暴击 / 暴击伤害</span>    <span class="dv" id="d-crit">-</span></div>
+        <div class="data-row"><span class="dk">最高阶段</span>           <span class="dv" id="d-stage">-</span></div>
+        <div class="data-row"><span class="dk">最高连击</span>           <span class="dv" id="d-rec">-</span></div>
+        <div class="data-row"><span class="dk">总伤害</span>             <span class="dv" id="d-dmg">-</span></div>
+        <div class="data-row"><span class="dk">胜利 / Boss击杀</span>    <span class="dv" id="d-fights">-</span></div>
       </div>
 
       <!-- Specialization -->
       <div class="panel">
-        <div class="panel-title">专精选择</div>
+        <div class="panel-title">专精 <span style="font-size:.6rem;color:var(--tx3);font-family:'JetBrains Mono'">选择一个战斗风格</span></div>
         <div id="spec-atk" class="spec-card" onclick="selectSpec('atk')">
-          <div class="spec-title" style="color:var(--ember2)">⚔ 战士 · Warrior</div>
-          <div class="spec-desc">Train ATK效果×2 · 每10关ATK+5%</div>
-          <div class="spec-bonus">激活：Train ATK ×2</div>
+          <div class="spec-title" style="color:var(--ember2)">⚔ 战士</div>
+          <div class="spec-desc">Train ATK×3 · 与巨人天赋产生协同</div>
         </div>
         <div id="spec-crit" class="spec-card" onclick="selectSpec('crit')">
-          <div class="spec-title" style="color:var(--gold2)">🎯 刺客 · Assassin</div>
-          <div class="spec-desc">CritDmg永久+50% · 连续暴击触发连击爆发</div>
-          <div class="spec-bonus">激活：CritDmg +50%</div>
+          <div class="spec-title" style="color:var(--gold2)">🎯 刺客</div>
+          <div class="spec-desc">CritDmg+50% · 每10次Train +1%暴击</div>
         </div>
         <div id="spec-spd" class="spec-card" onclick="selectSpec('spd')">
-          <div class="spec-title" style="color:var(--jade2)">⚡ 疾风 · Striker</div>
-          <div class="spec-desc">Train SPD效果×2 · 攻速上限8.0</div>
-          <div class="spec-bonus">激活：SPD Cap 8.0</div>
+          <div class="spec-title" style="color:var(--jade2)">⚡ 疾风</div>
+          <div class="spec-desc">攻速上限8.0 · SPD路线堆叠更快</div>
         </div>
-      </div>
-
-      <!-- Full Stats -->
-      <div class="panel">
-        <div class="panel-title">数值详情</div>
-        <div class="data-row"><span class="dk">总ATK</span>             <span class="dv" id="d-atk">10</span></div>
-        <div class="data-row"><span class="dk">基础/装备/天赋</span>    <span class="dv" id="d-atk-b">10/0/0</span></div>
-        <div class="data-row"><span class="dk">攻速 / 上限</span>       <span class="dv" id="d-spd">1.0/5.0</span></div>
-        <div class="data-row"><span class="dk">暴击率 / 暴击伤害</span> <span class="dv" id="d-crit">5%/200%</span></div>
-        <div class="data-row"><span class="dk">战斗时间上限</span>       <span class="dv" id="d-time">60s</span></div>
-        <div class="data-row"><span class="dk">阶段 / 最高阶段</span>   <span class="dv" id="d-stage">1/1</span></div>
-        <div class="data-row"><span class="dk">连胜 / 最高Combo</span>  <span class="dv" id="d-rec">0/0</span></div>
-        <div class="data-row"><span class="dk">总伤害输出</span>         <span class="dv" id="d-dmg">0</span></div>
-        <div class="data-row"><span class="dk">战斗/胜利/Boss</span>    <span class="dv" id="d-fights">0/0/0</span></div>
-        <div class="data-row"><span class="dk">传说/神话装备</span>      <span class="dv" id="d-leg">0/0</span></div>
-        <div class="data-row"><span class="dk">觉醒次数</span>           <span class="dv" id="d-awk">0次</span></div>
-        <div class="data-row"><span class="dk">战力评分</span>           <span class="dv" id="d-power">0</span></div>
+        <div style="font-size:.52rem;color:var(--tx3);margin-top:6px;text-align:center">更换专精需要5000金</div>
       </div>
 
       <!-- Talent -->
@@ -196,29 +262,110 @@
           <div id="t-name">战斗本能</div>
           <div id="t-desc">每次普攻永久 +1 ATK</div>
           <div id="t-count">已触发 0 次</div>
-          <div id="rc-cost">费用：<span style="color:var(--gold)" id="rc-txt">1,000 金</span></div>
-          <div id="rc-warn">⚠ 每次 ×3 倍 · 天赋随机</div>
+          <div id="rc-cost" style="margin-top:6px">费用：<span style="color:var(--gold)" id="rc-txt">1,000 金</span></div>
+          <div id="rc-warn">⚠ 每次 ×3 倍 · 随机结果</div>
           <button id="rc-btn" onclick="confirmReroll()">🎲 重置天赋</button>
         </div>
         <div id="history-list" style="margin-top:6px;display:flex;flex-direction:column;gap:2px;"></div>
       </div>
 
-      <!-- Passive Tree -->
-      <div class="panel">
-        <div class="panel-title">被动技能树</div>
-        <div id="passive-scroll-inner"></div>
+      <!-- Awakening -->
+      <div id="awaken-section">
+        <div id="awaken-title">🌅 觉醒</div>
+        <div id="awaken-req">加载中...</div>
+        <button id="awaken-btn" onclick="confirmAwaken()" disabled>觉醒</button>
       </div>
 
-      <!-- Achievements -->
-      <div class="panel">
-        <div class="panel-title">成就 (<span id="ach-count">0</span>/<span id="ach-total">0</span>)</div>
-        <div id="ach-list"></div>
+      <!-- Prestige (转生) -->
+      <div id="prestige-section" style="display:none;background:linear-gradient(135deg,rgba(212,82,42,.08),rgba(201,168,76,.08));border:1px solid rgba(201,168,76,.4);border-radius:10px;padding:12px;margin-bottom:7px;">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:.95rem;color:var(--gold);margin-bottom:6px">🔱 转生系统</div>
+        <div id="prestige-desc" style="font-size:.6rem;color:var(--tx3);line-height:1.6;margin-bottom:8px;white-space:pre-line"></div>
+        <button onclick="confirmPrestige()" style="width:100%;padding:10px;background:rgba(212,82,42,.1);border:1px solid var(--ember);border-radius:8px;color:var(--ember2);font-family:'JetBrains Mono',monospace;font-size:.72rem;cursor:pointer">🔱 转生</button>
+      </div>
+
+      <!-- Hidden but needed for JS -->
+      <div style="display:none">
+        <span id="d-time"></span><span id="d-leg"></span><span id="d-awk"></span>
+        <div id="passive-scroll-inner"></div>
+        <div id="ach-count"></div><div id="ach-total"></div><div id="ach-list"></div>
       </div>
 
     </div>
   </div>
 
 </div><!-- end root -->
+
+  <!-- ══ DUNGEON PAGE ══ -->
+  <div class="page" id="dungeon-page">
+    <div style="flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold)">⚔ 副本</div>
+      <button onclick="stopChallenge()" style="font-size:.52rem;padding:3px 8px;background:rgba(212,82,42,.08);border:1px solid var(--ember);border-radius:4px;color:var(--ember2);cursor:pointer">退出副本</button>
+    </div>
+    <div id="dungeon-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:6px;"></div>
+  </div>
+
+  <!-- ══ RUNE PAGE ══ -->
+  <div class="page" id="rune-page">
+    <div style="flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--bd);">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold)">✨ 符文系统</div>
+      <div style="font-size:.52rem;color:var(--tx3);margin-top:2px">击败Boss获得符文 · 最多装备6个</div>
+    </div>
+    <div id="rune-equipped" style="flex-shrink:0;padding:8px;border-bottom:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:4px;min-height:40px;background:rgba(139,92,246,.04);"></div>
+    <div id="rune-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:4px;"></div>
+  </div>
+
+  <!-- ══ TEAM PAGE ══ -->
+  <div class="page" id="team-page">
+    <div style="flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold)">👥 队伍</div>
+      <div id="team-synergy-badge" style="font-size:.52rem;color:var(--violet2)"></div>
+    </div>
+    <div id="team-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
+
+  <!-- ══ SETTINGS PAGE ══ -->
+  <div class="page" id="settings-page">
+    <div style="flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--bd);">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold)">⚙ 设置</div>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:8px;">
+      <!-- Personal Bests -->
+      <div class="panel" style="margin-bottom:7px">
+        <div class="panel-title">个人最佳记录</div>
+        <div id="personal-bests-list"></div>
+      </div>
+      <!-- Save/Reset -->
+      <div class="panel" style="margin-bottom:7px">
+        <div class="panel-title">存档</div>
+        <button onclick="manualSave()" style="width:100%;margin-bottom:6px;padding:9px;background:rgba(58,158,110,.1);border:1px solid var(--jade);border-radius:7px;color:var(--jade2);font-family:'JetBrains Mono',monospace;font-size:.65rem;cursor:pointer">💾 手动保存</button>
+        <button onclick="confirmReset()" style="width:100%;padding:9px;background:rgba(212,82,42,.1);border:1px solid var(--ember);border-radius:7px;color:var(--ember2);font-family:'JetBrains Mono',monospace;font-size:.65rem;cursor:pointer">🗑 重置存档</button>
+        <div style="font-size:.52rem;color:var(--tx3);margin-top:5px;text-align:center">重置后无法恢复，请谨慎操作</div>
+      </div>
+      <!-- Game info -->
+      <div class="panel">
+        <div class="panel-title">游戏信息</div>
+        <div class="data-row"><span class="dk">版本</span><span class="dv">v4.0</span></div>
+        <div class="data-row"><span class="dk">总游戏时间</span><span class="dv" id="total-play-time">-</span></div>
+        <div class="data-row"><span class="dk">自动强化次数</span><span class="dv" id="info-auto-upg">0</span></div>
+        <div class="data-row"><span class="dk">副本完成次数</span><span class="dv" id="info-dungeons">0</span></div>
+        <div class="data-row"><span class="dk">周常Boss击杀</span><span class="dv" id="info-wboss">0</span></div>
+        <div class="data-row"><span class="dk">称号数量</span><span class="dv" id="info-titles">0</span></div>
+        <div class="data-row"><span class="dk">符文已装备</span><span class="dv" id="info-runes">0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ GACHA PAGE ══ -->
+  <div class="page" id="gacha-page">
+    <div style="flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold)">💠 祈愿</div>
+      <div style="font-size:.62rem;color:var(--violet2)">💠 <span id="gacha-crystals">0</span> 传说水晶</div>
+    </div>
+    <div style="flex-shrink:0;padding:4px 12px;background:rgba(139,92,246,.05);border-bottom:1px solid var(--bd);font-size:.52rem;color:var(--tx3);">
+      保底进度：<span id="gacha-pity-count">0</span> / 90
+    </div>
+    <div id="gacha-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;"></div>
+  </div>
 
 <!-- MODAL -->
 <div id="overlay" onclick="if(event.target===this)closeModal()">
@@ -232,6 +379,7 @@
 
 <!-- FX LAYERS -->
 <div id="fx"></div>
+<div id="crit-flash"></div>
 <div id="particles"></div>
 
 <!-- FLASH OVERLAYS -->
@@ -255,10 +403,101 @@ function goTab(btn, id) {
   btn.classList.add('on');
   document.getElementById(id+'-page').classList.add('on');
   if(id==='equip')   renderGear();
-  if(id==='skills')  renderSkills();
-  if(id==='tasks')   renderTasks();
-  if(id==='shop')    renderShop();
-  if(id==='stats')   { updateStats(); renderSpecCards(); renderTalent(); renderPassive(); renderAchs(); renderAwaken(); }
+  if(id==='gacha')    renderGacha();
+  if(id==='settings') renderSettings();
+  if(id==='team')     renderTeam();
+  if(id==='shop')     { renderShop(); renderMatSinks(); }
+  if(id==='dungeon') renderDungeon();
+  if(id==='rune')    renderRune();
+  if(id==='stats')   { updateStats(); renderSpecCards(); renderTalent(); renderPassive(); renderAchs(); renderAwaken(); renderPrestige(); }
+}
+
+function showDungeonTabIfUnlocked() {
+  const tab=$('dungeon-tab'); if(tab && G.best>=10) tab.style.display='';
+  const rtab=$('rune-tab'); if(rtab && G.best>=20) rtab.style.display='';
+}
+
+function renderDungeon() {
+  const list=$('dungeon-list'); if(!list) return;
+  list.innerHTML='';
+
+  // Dungeons
+  const dHd=document.createElement('div');
+  dHd.style.cssText='font-family:"Cormorant Garamond",serif;font-size:.88rem;color:var(--gold);margin-bottom:8px;';
+  dHd.textContent='📦 每日副本';
+  list.appendChild(dHd);
+
+  DUNGEONS.forEach(d=>{
+    const today=new Date().toDateString();
+    const done=!!(G.dungeonsDone&&G.dungeonsDone[d.id+'_'+today]);
+    const locked=G.stage<d.unlockStage;
+    const mat=UPGRADE_MATS[d.matReward]||{icon:'?',name:'?'};
+    const card=document.createElement('div');
+    card.style.cssText='background:var(--s1);border:1px solid '+(done?'var(--jade)':'var(--bd2)')+';border-radius:9px;padding:10px 12px;margin-bottom:5px;opacity:'+(locked?'0.45':'1')+';';
+    // Header
+    const hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;';
+    const left=document.createElement('div');
+    left.style.cssText='display:flex;align-items:center;gap:8px;';
+    left.innerHTML='<span style="font-size:1.3rem">'+d.icon+'</span><div><div style="font-size:.72rem;font-weight:700">'+d.name+'</div><div style="font-size:.54rem;color:var(--tx3)">'+d.desc+'</div></div>';
+    hdr.appendChild(left);
+    if(done){ const b=document.createElement('div'); b.style.cssText='font-size:.52rem;padding:2px 7px;background:rgba(58,158,110,.1);border:1px solid var(--jade);border-radius:4px;color:var(--jade2);'; b.textContent='已完成'; hdr.appendChild(b); }
+    card.appendChild(hdr);
+    const rew=document.createElement('div');
+    rew.style.cssText='font-size:.56rem;color:var(--gold);margin-bottom:6px;';
+    rew.textContent='奖励: '+mat.icon+' '+mat.name+'×'+d.matAmt+' + 💠×'+d.crystalReward;
+    card.appendChild(rew);
+    const btn=document.createElement('div');
+    if(locked){ btn.style.cssText='font-size:.54rem;color:var(--tx3);'; btn.textContent='需要 Stage '+d.unlockStage; }
+    else if(done){ btn.style.cssText='font-size:.54rem;color:var(--jade2);'; btn.textContent='明天刷新'; }
+    else {
+      const b=document.createElement('button');
+      b.style.cssText='width:100%;padding:8px;background:rgba(74,159,212,.1);border:1px solid var(--ice);border-radius:6px;color:var(--ice2);font-family:"JetBrains Mono",monospace;font-size:.62rem;cursor:pointer;';
+      b.textContent='进入副本';
+      b.onclick=()=>startDungeon(d.id);
+      btn.appendChild(b);
+    }
+    card.appendChild(btn);
+    list.appendChild(card);
+  });
+
+  // Challenges
+  const cHd=document.createElement('div');
+  cHd.style.cssText='font-family:"Cormorant Garamond",serif;font-size:.88rem;color:var(--gold);margin:10px 0 8px;';
+  cHd.textContent='🏆 挑战模式';
+  list.appendChild(cHd);
+
+  CHALLENGES.forEach(c=>{
+    const locked=G.stage<c.unlockStage;
+    const best=(G.challengesBest&&G.challengesBest[c.id])||0;
+    const card=document.createElement('div');
+    card.style.cssText='background:var(--s1);border:1px solid var(--bd2);border-radius:9px;padding:10px 12px;margin-bottom:5px;opacity:'+(locked?'0.45':'1')+';';
+    const hdr=document.createElement('div');
+    hdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:5px;';
+    hdr.innerHTML='<span style="font-size:1.3rem">'+c.icon+'</span><div><div style="font-size:.72rem;font-weight:700">'+c.name+'</div><div style="font-size:.54rem;color:var(--tx3)">'+c.desc+'</div></div>';
+    card.appendChild(hdr);
+    if(best){ const bd=document.createElement('div'); bd.style.cssText='font-size:.54rem;color:var(--gold);margin-bottom:4px;'; bd.textContent='最高记录: Stage '+best; card.appendChild(bd); }
+    const rewd=document.createElement('div');
+    rewd.style.cssText='font-size:.54rem;color:var(--gold);margin-bottom:6px;';
+    rewd.textContent='奖励: 💠×'+c.reward.crystals+(c.reward.bossCore?' + 💀×'+c.reward.bossCore:'')+(c.reward.mythicShard?' + 🌠×'+c.reward.mythicShard:'');
+    card.appendChild(rewd);
+    const btn=document.createElement('div');
+    if(locked){ btn.style.cssText='font-size:.54rem;color:var(--tx3);'; btn.textContent='需要 Stage '+c.unlockStage; }
+    else {
+      const b=document.createElement('button');
+      b.style.cssText='width:100%;padding:8px;background:rgba(139,92,246,.1);border:1px solid var(--violet);border-radius:6px;color:var(--violet2);font-family:"JetBrains Mono",monospace;font-size:.62rem;cursor:pointer;';
+      b.textContent='开始挑战';
+      b.onclick=()=>startChallenge(c.id);
+      btn.appendChild(b);
+    }
+    card.appendChild(btn);
+    list.appendChild(card);
+  });
+}
+
+function showGachaTabIfUnlocked() {
+  const tab=$('gacha-tab');
+  if(tab && G.best>=50) tab.style.display='';
 }
 
 // ── EQUIP RENDER ─────────────────────────────────────────────
@@ -356,6 +595,14 @@ function renderGear() {
         bulkBtn.textContent='全部';
         if(canUpgrade) bulkBtn.onclick=()=>{ bulkUpgradeGear(slot,'path'); };
         upgradeDiv.appendChild(bulkBtn);
+        // Reset path button
+        const resetBtn=document.createElement('button');
+        const resetCost=Math.max(1000,Math.floor(G.gold*0.1+(g.pathLv||0)*500));
+        resetBtn.style.cssText='padding:9px 8px;border-radius:7px;border:1px solid rgba(212,82,42,.4);background:rgba(212,82,42,.07);color:var(--ember2);font-family:"JetBrains Mono",monospace;font-size:.52rem;cursor:pointer;';
+        resetBtn.innerHTML='🔄<br><span style="font-size:.44rem">'+fmt(resetCost)+'金</span>';
+        resetBtn.title='重置路线，退还50%材料';
+        resetBtn.onclick=()=>upgradeGear(slot,'reset');
+        upgradeDiv.appendChild(resetBtn);
       } else {
         const maxDiv=document.createElement('div');
         maxDiv.style.cssText='font-size:.6rem;color:var(--gold);padding:8px;text-align:center;';
@@ -370,6 +617,18 @@ function renderGear() {
       const nextBossData=bossLv<maxBossLv?BOSS_PATH.levels[bossLv]:null;
       const bossHave=G.upgMats.boss_core||0;
       const canBoss=nextBossData&&bossHave>=nextBossData.cost;
+      // Evolution button (show if eligible)
+      const canEvolve=(g.pathLv||0)>=GEAR_EVOLUTION_REQ.pathLv&&(g.bossLv||0)>=GEAR_EVOLUTION_REQ.bossLv;
+      if(canEvolve){
+        const evoDiv=document.createElement('div');
+        evoDiv.style.marginBottom='5px';
+        const evoBtn=document.createElement('button');
+        evoBtn.style.cssText='width:100%;padding:9px;border-radius:7px;background:linear-gradient(135deg,rgba(201,168,76,.15),rgba(139,92,246,.15));border:1px solid var(--gold);color:var(--gold2);font-family:"JetBrains Mono",monospace;font-size:.65rem;cursor:pointer;font-weight:700;';
+        evoBtn.textContent='🌅 装备进化 — 属性×2，路线重置';
+        evoBtn.onclick=()=>{ upgradeGear(slot,'evolve'); };
+        evoDiv.appendChild(evoBtn);
+        card.appendChild(evoDiv);
+      }
       const bossDiv=document.createElement('div');
       bossDiv.style.cssText='display:flex;gap:5px;';
       if(nextBossData){
@@ -389,6 +648,9 @@ function renderGear() {
     }
     list.appendChild(card);
   }
+  // Unit2 teaser
+  const teaser=$('unit2-teaser');
+  if(teaser) teaser.style.display=G.best>=50?'block':'none';
 }
 
 // Keep renderEquip as alias for compatibility
@@ -756,6 +1018,61 @@ function renderAchs() {
 }
 
 // ── MODAL ────────────────────────────────────────────────────
+// ── GACHA RENDER ─────────────────────────────────────────────
+function renderGacha() {
+  $('gacha-crystals').textContent=G.gachaCrystals||0;
+  $('gacha-pity-count').textContent=G.gachaPity||0;
+  const list=$('gacha-list'); if(!list) return;
+  list.innerHTML='';
+  GACHA_BANNERS.forEach(banner=>{
+    const card=document.createElement('div');
+    card.style.cssText='background:var(--s1);border:1px solid var(--bd2);border-radius:10px;padding:12px;';
+    const singleCost=banner.cost.single;
+    const multiCost=banner.cost.multi;
+    const canSingle=(G.gachaCrystals||0)>=singleCost;
+    const canMulti=(G.gachaCrystals||0)>=multiCost;
+    card.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:1.5rem">${banner.icon}</span>
+        <div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:.9rem;font-weight:700;color:var(--gold)">${banner.name}</div>
+          <div style="font-size:.56rem;color:var(--tx3);margin-top:1px">${banner.desc}</div>
+        </div>
+      </div>
+      <div style="font-size:.56rem;color:var(--tx3);margin-bottom:8px">
+        SSR ${banner.rates.ssr}% · SR ${banner.rates.sr}% · 保底90抽
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="pullAndShow('${banner.id}',false)" style="flex:1;padding:9px;border-radius:7px;border:1px solid ${canSingle?'var(--gold)':'var(--bd2)'};background:${canSingle?'rgba(201,168,76,.1)':'rgba(100,100,120,.05)'};color:${canSingle?'var(--gold2)':'var(--tx3)'};font-family:'JetBrains Mono',monospace;font-size:.6rem;cursor:${canSingle?'pointer':'not-allowed'}">
+          单抽<br><span style="font-size:.52rem">💠${singleCost}</span>
+        </button>
+        <button onclick="pullAndShow('${banner.id}',true)" style="flex:2;padding:9px;border-radius:7px;border:1px solid ${canMulti?'var(--violet)':'var(--bd2)'};background:${canMulti?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)'};color:${canMulti?'var(--violet2)':'var(--tx3)'};font-family:'JetBrains Mono',monospace;font-size:.6rem;cursor:${canMulti?'pointer':'not-allowed'}">
+          十连<br><span style="font-size:.52rem">💠${multiCost}</span>
+        </button>
+      </div>`;
+    list.appendChild(card);
+  });
+  // How to earn crystals info
+  const info=document.createElement('div');
+  info.style.cssText='background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:.58rem;color:var(--tx3);line-height:1.7;';
+  info.innerHTML='<div style="color:var(--gold);margin-bottom:4px">💠 如何获得传说水晶</div>击败Boss获得水晶<br>每10关Boss额外奖励<br>购买月卡（即将推出）';
+  list.appendChild(info);
+}
+
+function pullAndShow(bannerId, multi) {
+  const results=doGachaPull(bannerId, multi);
+  if(!results.length) return;
+  const hasSSR=results.some(r=>r.rar==='mythic');
+  const body=results.map(r=>{
+    const rarColor={common:'var(--tx)',rare:'var(--rr)',epic:'var(--re)',legendary:'var(--rl)',mythic:'var(--rm)'}[r.rar]||'var(--tx)';
+    return `[${RNAME[r.rar]||r.rar}] ${r.icon} ${r.name}`;
+  }).join(' / ');
+  openModal(hasSSR?'🌟 传说级获得！':'祈愿结果', body,
+    [{label:'确认',cls:'m-ok',cb:()=>{closeModal();renderGacha();}}]);
+  if(hasSSR){ spawnParts('legendary'); }
+  updateStats();
+}
+
 function openModal(title, body, btnsArr) {
   $('m-title').textContent=title;
   $('m-body').textContent=body;
@@ -766,10 +1083,396 @@ function openModal(title, body, btnsArr) {
   });
   $('overlay').classList.add('on');
 }
+// ── MAT SINKS RENDER ─────────────────────────────────
+function renderMatSinks() {
+  const list=$('mat-sink-list'); if(!list) return;
+  list.innerHTML='';
+  if(typeof MAT_SINKS==='undefined') return;
+  MAT_SINKS.forEach(sink=>{
+    const canAfford=Object.entries(sink.cost).every(([k,v])=>(G.upgMats[k]||0)>=v);
+    const costStr=Object.entries(sink.cost).map(([k,v])=>(UPGRADE_MATS[k]?.icon||k)+v).join(' ');
+    const card=document.createElement('div');
+    card.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 9px;background:var(--s1);border:1px solid '+(canAfford?'var(--violet)':'var(--bd2)')+';border-radius:7px;';
+    card.innerHTML='<span style="font-size:1.1rem">'+sink.icon+'</span>'+
+      '<div style="flex:1"><div style="font-size:.68rem;font-weight:700">'+sink.n+'</div>'+
+      '<div style="font-size:.54rem;color:var(--tx3);margin-top:1px">'+sink.desc+'</div>'+
+      '<div style="font-size:.52rem;color:var(--violet2);margin-top:1px">消耗: '+costStr+'</div></div>';
+    const btn=document.createElement('button');
+    btn.style.cssText='padding:6px 9px;border-radius:5px;border:1px solid '+(canAfford?'var(--violet)':'var(--bd2)')+';background:'+(canAfford?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)')+';color:'+(canAfford?'var(--violet2)':'var(--tx3)')+';font-family:"JetBrains Mono",monospace;font-size:.58rem;cursor:'+(canAfford?'pointer':'not-allowed')+';';
+    btn.textContent='炼制';
+    if(canAfford) btn.onclick=()=>{ sink.apply(); Object.entries(sink.cost).forEach(([k,v])=>{ G.upgMats[k]-=v; }); updateStats(); renderMatSinks(); };
+    card.appendChild(btn);
+    list.appendChild(card);
+  });
+}
+
+// ── TEAM RENDER ──────────────────────────────────────
+function renderTeam() {
+  const list=$('team-list'); if(!list) return;
+  list.innerHTML='';
+  const units=G.units||[];
+
+  // Active synergies
+  const badge=$('team-synergy-badge');
+  if(badge&&typeof TEAM_SYNERGIES!=='undefined'){
+    const active=units.filter(u=>u.unlocked);
+    const syns=TEAM_SYNERGIES.filter(s=>s.req(active));
+    badge.textContent=syns.length?syns.map(s=>s.icon+' '+s.name).join(' · '):'无协同效果';
+  }
+
+  // Synergy panel
+  if(typeof TEAM_SYNERGIES!=='undefined'){
+    const synPanel=document.createElement('div');
+    synPanel.className='panel';
+    synPanel.innerHTML='<div class="panel-title">⚡ 协同效果</div>';
+    const active=units.filter(u=>u.unlocked);
+    TEAM_SYNERGIES.forEach(syn=>{
+      const active2=syn.req(active);
+      const row=document.createElement('div');
+      row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.64rem;opacity:'+(active2?'1':'0.4')+';';
+      row.innerHTML='<span style="font-size:1rem">'+syn.icon+'</span>'+
+        '<div style="flex:1"><div style="font-weight:700;color:'+(active2?'var(--jade2)':'var(--tx3)')+'">'+syn.name+'</div>'+
+        '<div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+syn.desc+'</div></div>'+
+        (active2?'<span style="color:var(--jade2);font-size:.6rem">激活</span>':'');
+      synPanel.appendChild(row);
+    });
+    list.appendChild(synPanel);
+  }
+
+  // Unit cards
+  if(typeof UNIT_ROLES!=='undefined'){
+    UNIT_ROLES.forEach(role=>{
+      const unit=units.find(u=>u.roleId===role.id);
+      const unlocked=unit&&unit.unlocked;
+      const req=UNIT_UNLOCK_REQS&&UNIT_UNLOCK_REQS[role.id];
+      const card=document.createElement('div');
+      card.className='panel';
+      card.style.opacity=unlocked?'1':'0.6';
+      const headerHTML='<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;">'+
+        '<span style="font-size:1.5rem">'+role.icon+'</span>'+
+        '<div style="flex:1">'+
+          '<div style="font-family:\"Cormorant Garamond\",serif;font-size:.9rem;font-weight:700;color:"+role.color+">'+role.name+'</div>'+
+          '<div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+role.desc+'</div>'+
+          '<div style="font-size:.52rem;color:var(--violet2);margin-top:2px">被动: '+role.passive+'</div>'+
+        '</div>'+
+        (unlocked?'<div style="font-size:.56rem;padding:2px 8px;background:rgba(58,158,110,.1);border:1px solid var(--jade);border-radius:4px;color:var(--jade2)">激活</div>':
+          req?'<div style="font-size:.52rem;color:var(--tx3)">'+req.desc+'</div>':'')+'</div>';
+      card.innerHTML=headerHTML;
+      if(unlocked&&unit){
+        // Stats
+        const statsDiv=document.createElement('div');
+        statsDiv.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.6rem;margin-bottom:8px;';
+        const s=[['ATK',fmt(Math.floor(10*role.baseAtk))],['SPD',(1.0*role.baseSpd).toFixed(1)],['CRIT',Math.floor(5*role.baseCrit)+'%'],['CDmg',Math.floor(200*role.baseCdmg)+'%']];
+        s.forEach(([k,v])=>{ statsDiv.innerHTML+='<div style="background:var(--s2);border-radius:4px;padding:4px 6px;"><span style="color:var(--tx3)">'+k+' </span><span style="color:var(--gold2);font-weight:700">'+v+'</span></div>'; });
+        card.appendChild(statsDiv);
+      } else if(!unlocked&&req){
+        const unlockBtn=document.createElement('button');
+        const canUnlock=G.best>=req.stage&&G.gold>=req.gold;
+        unlockBtn.style.cssText='width:100%;padding:9px;background:'+(canUnlock?'rgba(201,168,76,.1)':'rgba(100,100,120,.05)')+';border:1px solid '+(canUnlock?'var(--gold)':'var(--bd2)')+';border-radius:7px;color:'+(canUnlock?'var(--gold2)':'var(--tx3)')+';font-family:"JetBrains Mono",monospace;font-size:.65rem;cursor:'+(canUnlock?'pointer':'not-allowed')+';';
+        unlockBtn.textContent='解锁 ('+fmt(req.gold)+'金)';
+        if(canUnlock) unlockBtn.onclick=()=>{ tryUnlockUnit(role.id); renderTeam(); };
+        card.appendChild(unlockBtn);
+      }
+      list.appendChild(card);
+    });
+  }
+}
+
+// ── SETTINGS RENDER ──────────────────────────────────
+function renderSettings() {
+  // Personal bests
+  const pb=$('personal-bests-list'); if(!pb) return;
+  pb.innerHTML='';
+  if(typeof LEADERBOARD_CATEGORIES!=='undefined'){
+    LEADERBOARD_CATEGORIES.forEach(c=>{
+      const val=(G.personalBests&&G.personalBests[c.id])||c.getValue();
+      const row=document.createElement('div'); row.className='data-row';
+      row.innerHTML='<span class="dk">'+c.icon+' '+c.name+'</span><span class="dv">'+fmt(val)+'</span>';
+      pb.appendChild(row);
+    });
+  }
+  // Game info
+  $('info-auto-upg')&&($('info-auto-upg').textContent=fmt(G.autoUpgradeCount||0));
+  $('info-dungeons')&&($('info-dungeons').textContent=G.totalDungeons||0);
+  $('info-wboss')&&($('info-wboss').textContent=G.weeklyBossKills||0);
+  $('info-titles')&&($('info-titles').textContent=(G.titlesEarned||[]).length);
+  $('info-runes')&&($('info-runes').textContent=(G.runesEquipped||[]).length+'/6');
+  // Play time
+  const mins=Math.floor((Date.now()-(G.startTime||Date.now()))/60000);
+  $('total-play-time')&&($('total-play-time').textContent=mins>=60?Math.floor(mins/60)+'h'+mins%60+'m':mins+'min');
+}
+
+function confirmReset() {
+  openModal('⚠ 重置存档',
+    '确定要重置所有进度吗？\n\n所有等级、装备、材料、金币\n全部清空，无法恢复！',
+    [{label:'确认重置',cls:'m-del',cb:()=>{ localStorage.removeItem('chronicle_v2'); closeModal(); location.reload(); }},
+     {label:'取消',cls:'m-no',cb:closeModal}]);
+}
+
 function closeModal() { $('overlay').classList.remove('on'); $('m-body').innerHTML=''; $('m-btns').innerHTML=''; }
 
+// ── RUNE RENDER ──────────────────────────────────────
+function renderRune() {
+  // Equipped runes
+  const eq=$('rune-equipped'); if(!eq) return;
+  eq.innerHTML='';
+  const equipped=G.runesEquipped||[];
+  for(let i=0;i<RUNE_SLOTS;i++){
+    const slot=document.createElement('div');
+    slot.style.cssText='width:44px;height:44px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.9rem;cursor:pointer;border:1px solid;transition:all .15s;';
+    if(i<equipped.length){
+      const rune=RUNES.find(r=>r.id===equipped[i]);
+      if(rune){
+        slot.style.borderColor='var(--violet)';
+        slot.style.background='rgba(139,92,246,.1)';
+        slot.innerHTML='<div>'+rune.icon+'</div><div style="font-size:.38rem;color:var(--violet2)">'+rune.name.slice(0,4)+'</div>';
+        slot.title=rune.name+': '+rune.desc;
+        slot.onclick=(()=>{const id=equipped[i];return()=>unequipRune(i);})();
+      }
+    } else {
+      slot.style.borderColor='var(--bd2)';
+      slot.style.borderStyle='dashed';
+      slot.style.color='var(--tx3)';
+      slot.innerHTML='<div style="font-size:.6rem">+</div><div style="font-size:.38rem">空槽</div>';
+    }
+    eq.appendChild(slot);
+  }
+  // Rune inventory
+  const list=$('rune-list'); if(!list) return;
+  list.innerHTML='';
+  const inv=G.runeInventory||[];
+  if(!inv.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:.66rem;color:var(--tx3);font-style:italic;padding:8px;';
+    empty.textContent='击败Boss获得符文';
+    list.appendChild(empty); return;
+  }
+  // Group by id, show count
+  const counts={};
+  inv.forEach(id=>counts[id]=(counts[id]||0)+1);
+  Object.entries(counts).forEach(([id,cnt])=>{
+    const rune=RUNES.find(r=>r.id===id); if(!rune) return;
+    const canEquip=(G.runesEquipped||[]).length<RUNE_SLOTS&&!(G.runesEquipped||[]).includes(id);
+    const card=document.createElement('div');
+    card.style.cssText='display:flex;align-items:center;gap:9px;padding:9px 10px;background:var(--s1);border:1px solid var(--bd2);border-radius:8px;';
+    card.innerHTML='<div style="font-size:1.3rem">'+rune.icon+'</div>'+
+      '<div style="flex:1"><div style="font-size:.7rem;font-weight:700">'+rune.name+' <span style="color:var(--tx3);font-size:.56rem">×'+cnt+'</span></div>'+
+      '<div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+rune.desc+'</div>'+
+      '<div style="font-size:.5rem;color:var(--violet2);margin-top:1px">T'+rune.tier+'</div></div>';
+    if(canEquip){
+      const btn=document.createElement('button');
+      btn.style.cssText='padding:6px 10px;background:rgba(139,92,246,.1);border:1px solid var(--violet);border-radius:6px;color:var(--violet2);font-family:"JetBrains Mono",monospace;font-size:.6rem;cursor:pointer;';
+      btn.textContent='装备';
+      btn.onclick=()=>equipRune(id);
+      card.appendChild(btn);
+    }
+    list.appendChild(card);
+  });
+}
+
+function equipRune(id) {
+  if(!G.runesEquipped) G.runesEquipped=[];
+  if(G.runesEquipped.length>=RUNE_SLOTS){ notif('符文槽已满'); return; }
+  G.runesEquipped.push(id);
+  // Remove one from inventory
+  const idx=(G.runeInventory||[]).indexOf(id);
+  if(idx>=0) G.runeInventory.splice(idx,1);
+  // Apply rune effect
+  const rune=RUNES.find(r=>r.id===id);
+  if(rune&&rune.effect) rune.effect();
+  updateStats(); renderRune();
+  log('✨ 装备符文：'+rune.name,'ev');
+}
+
+function unequipRune(slotIdx) {
+  if(!G.runesEquipped||slotIdx>=G.runesEquipped.length) return;
+  const id=G.runesEquipped[slotIdx];
+  const rune=RUNES.find(r=>r.id===id);
+  G.runesEquipped.splice(slotIdx,1);
+  if(!G.runeInventory) G.runeInventory=[];
+  G.runeInventory.push(id);
+  // Recalc all rune bonuses from scratch
+  recalcRuneBonuses();
+  updateStats(); renderRune();
+  log('✨ 卸下符文：'+(rune?rune.name:id),'sys');
+}
+
+function recalcRuneBonuses() {
+  // Reset
+  G.runeAtk=0; G.runeSpd=0; G.runeCrit=0; G.runeCdmg=0;
+  G.runeGoldMult=0; G.runeTruePct=0; G.runeComboBonus=false;
+  G.runeTime=0; G.runeMythicMult=0; G.runePrestigeMult=1;
+  // Re-apply all equipped runes
+  (G.runesEquipped||[]).forEach(id=>{
+    const rune=RUNES.find(r=>r.id===id);
+    if(rune&&rune.effect) rune.effect();
+  });
+}
+
+// ── AUTO UPGRADE ──────────────────────────────────────
+function setAutoUpgrade(mode) {
+  G.autoUpgradeMode=mode;
+  document.querySelectorAll('.au-btn').forEach(b=>b.classList.remove('on'));
+  const btn=$('au-'+mode); if(btn) btn.classList.add('on');
+  notif('自动强化：'+AUTO_UPGRADE_MODES.find(m=>m.id===mode)?.name||mode);
+}
+
+function updateAutoUpgUI() {
+  document.querySelectorAll('.au-btn').forEach(b=>b.classList.remove('on'));
+  const btn=$('au-'+(G.autoUpgradeMode||'off')); if(btn) btn.classList.add('on');
+  $('au-count')&&($('au-count').textContent=G.autoUpgradeCount||0);
+}
+
+// ── TITLE DISPLAY ─────────────────────────────────────
+function updateActiveTitle() {
+  const el=$('active-title'); if(!el) return;
+  if(G.activeTitle){
+    const t=typeof TITLES!=='undefined'&&TITLES.find(x=>x.id===G.activeTitle);
+    el.textContent=t?t.icon+' '+t.name:'';
+  } else { el.textContent=''; }
+}
+
+// ── PRESTIGE RENDER ───────────────────────────────────
+function renderPrestige() {
+  const sec=$('prestige-section'); if(!sec) return;
+  sec.style.display = G.best>=500?'block':'none';
+  if(G.best<500) return;
+  const n=G.prestigeCount||0;
+  const bonus=PRESTIGE_BONUSES[Math.min(n,PRESTIGE_BONUSES.length-1)];
+  const desc=`转生次数：${n}次\n当前倍率：×${G.prestigeMult||1}\n\n下次转生奖励：${bonus.desc}\n\n注意：等级/阶段/ATK将重置\n装备强化、觉醒、祈愿全部保留`;
+  $('prestige-desc').textContent=desc;
+}
+
+function confirmPrestige() {
+  if(!canPrestige()){ notif('需要到达Stage 500'); return; }
+  const n=G.prestigeCount||0;
+  const bonus=PRESTIGE_BONUSES[Math.min(n,PRESTIGE_BONUSES.length-1)];
+  openModal('🔱 转生确认',
+    `转生后获得：${bonus.desc}\n\n等级、阶段、ATK将重置\n装备等级和祈愿全部保留\n\n确定转生吗？`,
+    [{label:'确认转生',cls:'m-ok',cb:()=>{doPrestige();closeModal();renderPrestige();updateStats();}},
+     {label:'取消',cls:'m-no',cb:closeModal}]);
+}
+
+// ── ZONE BADGE UPDATE ─────────────────────────────────
+function updateZoneBadge() {
+  const z=$('zone-badge'); if(!z) return;
+  if(typeof getZone==='function'){
+    const zone=getZone(G.stage);
+    z.textContent=zone.icon+' '+zone.name;
+  }
+}
+
 // ── START ────────────────────────────────────────────────────
-window.addEventListener('load', initGame);
+
+// ══════════════════════════════════════════════════
+//  PIXEL ART BATTLE SCENE
+// ══════════════════════════════════════════════════
+
+// CSS box-shadow pixel sprites
+const SPRITES = {
+  // Player warrior sprite
+  player: `20px 0px 0 0 #0a0a15, 25px 0px 0 0 #0a0a15, 30px 0px 0 0 #0a0a15, 15px 5px 0 0 #0a0a15, 20px 5px 0 0 #f5e8d0, 25px 5px 0 0 #f5e8d0, 30px 5px 0 0 #f5e8d0, 35px 5px 0 0 #0a0a15, 15px 10px 0 0 #0a0a15, 20px 10px 0 0 #f5e8d0, 25px 10px 0 0 #d4b896, 30px 10px 0 0 #f5e8d0, 35px 10px 0 0 #0a0a15, 20px 15px 0 0 #0a0a15, 25px 15px 0 0 #0a0a15, 30px 15px 0 0 #0a0a15, 10px 20px 0 0 #0a0a15, 15px 20px 0 0 #c84820, 20px 20px 0 0 #c84820, 25px 20px 0 0 #c84820, 30px 20px 0 0 #c84820, 35px 20px 0 0 #0a0a15, 5px 25px 0 0 #0a0a15, 10px 25px 0 0 #c84820, 15px 25px 0 0 #c84820, 20px 25px 0 0 #d4b896, 25px 25px 0 0 #d4b896, 30px 25px 0 0 #c84820, 35px 25px 0 0 #c84820, 40px 25px 0 0 #0a0a15, 0px 30px 0 0 #0a0a15, 5px 30px 0 0 #c84820, 10px 30px 0 0 #c84820, 15px 30px 0 0 #d4b896, 20px 30px 0 0 #d4b896, 25px 30px 0 0 #d4b896, 30px 30px 0 0 #c84820, 35px 30px 0 0 #c84820, 40px 30px 0 0 #0a0a15, 5px 35px 0 0 #0a0a15, 10px 35px 0 0 #c84820, 15px 35px 0 0 #c84820, 20px 35px 0 0 #d4b896, 25px 35px 0 0 #d4b896, 30px 35px 0 0 #c84820, 35px 35px 0 0 #c84820, 40px 35px 0 0 #0a0a15, 10px 40px 0 0 #0a0a15, 15px 40px 0 0 #c84820, 20px 40px 0 0 #c84820, 25px 40px 0 0 #c84820, 30px 40px 0 0 #c84820, 35px 40px 0 0 #0a0a15, 15px 45px 0 0 #0a0a15, 20px 45px 0 0 #c84820, 25px 45px 0 0 #c84820, 30px 45px 0 0 #0a0a15, 10px 50px 0 0 #0a0a15, 15px 50px 0 0 #c84820, 20px 50px 0 0 #c84820, 25px 50px 0 0 #c84820, 30px 50px 0 0 #c84820, 35px 50px 0 0 #0a0a15, 5px 55px 0 0 #0a0a15, 10px 55px 0 0 #c84820, 15px 55px 0 0 #c84820, 30px 55px 0 0 #c84820, 35px 55px 0 0 #c84820, 40px 55px 0 0 #0a0a15, 0px 60px 0 0 #0a0a15, 5px 60px 0 0 #c84820, 10px 60px 0 0 #c84820, 35px 60px 0 0 #c84820, 40px 60px 0 0 #c84820, 45px 60px 0 0 #0a0a15, 0px 65px 0 0 #0a0a15, 5px 65px 0 0 #c84820, 40px 65px 0 0 #c84820, 45px 65px 0 0 #0a0a15`,
+  // Enemy sprites per zone
+  goblin:     `12px 0px 0 0 #0a0a15, 18px 0px 0 0 #2a8040, 24px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #2a8040, 18px 6px 0 0 #40c060, 24px 6px 0 0 #2a8040, 30px 6px 0 0 #0a0a15, 0px 12px 0 0 #0a0a15, 6px 12px 0 0 #2a8040, 12px 12px 0 0 #40c060, 18px 12px 0 0 #ffffff, 24px 12px 0 0 #ffffff, 30px 12px 0 0 #2a8040, 36px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #2a8040, 12px 18px 0 0 #40c060, 18px 18px 0 0 #2a8040, 24px 18px 0 0 #2a8040, 30px 18px 0 0 #2a8040, 36px 18px 0 0 #0a0a15, 6px 24px 0 0 #0a0a15, 12px 24px 0 0 #2a8040, 18px 24px 0 0 #2a8040, 24px 24px 0 0 #2a8040, 30px 24px 0 0 #0a0a15, 12px 30px 0 0 #0a0a15, 18px 30px 0 0 #0a0a15, 24px 30px 0 0 #0a0a15, 6px 36px 0 0 #0a0a15, 18px 36px 0 0 #0a0a15, 30px 36px 0 0 #0a0a15`,
+  fire_demon: `18px 0px 0 0 #0a0a15, 24px 0px 0 0 #ff4400, 30px 0px 0 0 #0a0a15, 12px 6px 0 0 #0a0a15, 18px 6px 0 0 #ff4400, 24px 6px 0 0 #ff4400, 30px 6px 0 0 #0a0a15, 6px 12px 0 0 #0a0a15, 12px 12px 0 0 #ff4400, 18px 12px 0 0 #ff8800, 24px 12px 0 0 #ff4400, 30px 12px 0 0 #ff4400, 36px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #ff4400, 12px 18px 0 0 #ff8800, 18px 18px 0 0 #ff8800, 24px 18px 0 0 #ff8800, 30px 18px 0 0 #ff4400, 36px 18px 0 0 #ff4400, 42px 18px 0 0 #0a0a15, 0px 24px 0 0 #0a0a15, 6px 24px 0 0 #ff4400, 12px 24px 0 0 #ff4400, 18px 24px 0 0 #ff8800, 24px 24px 0 0 #ff8800, 30px 24px 0 0 #ff4400, 36px 24px 0 0 #ff4400, 42px 24px 0 0 #0a0a15, 6px 30px 0 0 #0a0a15, 12px 30px 0 0 #ff4400, 18px 30px 0 0 #ff4400, 24px 30px 0 0 #ff8800, 30px 30px 0 0 #ff4400, 36px 30px 0 0 #0a0a15, 12px 36px 0 0 #0a0a15, 18px 36px 0 0 #aa2200, 24px 36px 0 0 #882200, 30px 36px 0 0 #0a0a15, 6px 42px 0 0 #0a0a15, 12px 42px 0 0 #aa2200, 18px 42px 0 0 #882200, 24px 42px 0 0 #882200, 30px 42px 0 0 #0a0a15, 6px 48px 0 0 #0a0a15, 12px 48px 0 0 #882200, 18px 48px 0 0 #0a0a15`,
+  ice_golem:  `12px 0px 0 0 #0a0a15, 18px 0px 0 0 #6090c8, 24px 0px 0 0 #6090c8, 30px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #6090c8, 18px 6px 0 0 #90c0f0, 24px 6px 0 0 #90c0f0, 30px 6px 0 0 #6090c8, 36px 6px 0 0 #0a0a15, 0px 12px 0 0 #0a0a15, 6px 12px 0 0 #6090c8, 12px 12px 0 0 #90c0f0, 18px 12px 0 0 #90c0f0, 24px 12px 0 0 #90c0f0, 30px 12px 0 0 #90c0f0, 36px 12px 0 0 #6090c8, 42px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #6090c8, 12px 18px 0 0 #90c0f0, 18px 18px 0 0 #6090c8, 24px 18px 0 0 #6090c8, 30px 18px 0 0 #90c0f0, 36px 18px 0 0 #6090c8, 42px 18px 0 0 #0a0a15, 0px 24px 0 0 #0a0a15, 6px 24px 0 0 #6090c8, 12px 24px 0 0 #90c0f0, 18px 24px 0 0 #90c0f0, 24px 24px 0 0 #90c0f0, 30px 24px 0 0 #90c0f0, 36px 24px 0 0 #6090c8, 42px 24px 0 0 #0a0a15, 6px 30px 0 0 #0a0a15, 12px 30px 0 0 #6090c8, 18px 30px 0 0 #6090c8, 24px 30px 0 0 #6090c8, 30px 30px 0 0 #6090c8, 36px 30px 0 0 #0a0a15, 12px 36px 0 0 #0a0a15, 18px 36px 0 0 #6090c8, 24px 36px 0 0 #6090c8, 30px 36px 0 0 #0a0a15, 6px 42px 0 0 #0a0a15, 18px 42px 0 0 #0a0a15, 24px 42px 0 0 #0a0a15, 36px 42px 0 0 #0a0a15`,
+  // Boss sprite
+  boss: `0px 0px 0 0 #0a0a15, 18px 0px 0 0 #0a0a15, 24px 0px 0 0 #0a0a15, 30px 0px 0 0 #0a0a15, 36px 0px 0 0 #0a0a15, 42px 0px 0 0 #0a0a15, 48px 0px 0 0 #0a0a15, 54px 0px 0 0 #0a0a15, 60px 0px 0 0 #0a0a15, 66px 0px 0 0 #0a0a15, 84px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #0a0a15, 18px 6px 0 0 #8b0000, 24px 6px 0 0 #8b0000, 30px 6px 0 0 #8b0000, 36px 6px 0 0 #cc2200, 42px 6px 0 0 #cc2200, 48px 6px 0 0 #8b0000, 54px 6px 0 0 #8b0000, 60px 6px 0 0 #8b0000, 66px 6px 0 0 #0a0a15, 72px 6px 0 0 #0a0a15, 6px 12px 0 0 #0a0a15, 12px 12px 0 0 #8b0000, 18px 12px 0 0 #8b0000, 24px 12px 0 0 #8b0000, 30px 12px 0 0 #cc2200, 36px 12px 0 0 #cc2200, 42px 12px 0 0 #cc2200, 48px 12px 0 0 #cc2200, 54px 12px 0 0 #cc2200, 60px 12px 0 0 #8b0000, 66px 12px 0 0 #8b0000, 72px 12px 0 0 #8b0000, 78px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #8b0000, 12px 18px 0 0 #8b0000, 18px 18px 0 0 #cc2200, 24px 18px 0 0 #cc2200, 30px 18px 0 0 #cc2200, 36px 18px 0 0 #ff8c00, 42px 18px 0 0 #ff8c00, 48px 18px 0 0 #cc2200, 54px 18px 0 0 #cc2200, 60px 18px 0 0 #cc2200, 66px 18px 0 0 #8b0000, 72px 18px 0 0 #8b0000, 78px 18px 0 0 #0a0a15, 0px 24px 0 0 #0a0a15, 6px 24px 0 0 #8b0000, 12px 24px 0 0 #cc2200, 18px 24px 0 0 #cc2200, 24px 24px 0 0 #cc2200, 30px 24px 0 0 #ff8c00, 36px 24px 0 0 #ff8c00, 42px 24px 0 0 #ff8c00, 48px 24px 0 0 #ff8c00, 54px 24px 0 0 #cc2200, 60px 24px 0 0 #cc2200, 66px 24px 0 0 #cc2200, 72px 24px 0 0 #8b0000, 78px 24px 0 0 #0a0a15, 0px 30px 0 0 #0a0a15, 6px 30px 0 0 #8b0000, 12px 30px 0 0 #cc2200, 18px 30px 0 0 #cc2200, 24px 30px 0 0 #cc2200, 30px 30px 0 0 #cc2200, 36px 30px 0 0 #cc2200, 42px 30px 0 0 #cc2200, 48px 30px 0 0 #cc2200, 54px 30px 0 0 #cc2200, 60px 30px 0 0 #cc2200, 66px 30px 0 0 #8b0000, 72px 30px 0 0 #8b0000, 78px 30px 0 0 #0a0a15, 0px 36px 0 0 #0a0a15, 6px 36px 0 0 #0a0a15, 12px 36px 0 0 #8b0000, 18px 36px 0 0 #cc2200, 24px 36px 0 0 #cc2200, 30px 36px 0 0 #cc2200, 36px 36px 0 0 #cc2200, 42px 36px 0 0 #cc2200, 48px 36px 0 0 #cc2200, 54px 36px 0 0 #cc2200, 60px 36px 0 0 #8b0000, 66px 36px 0 0 #0a0a15, 72px 36px 0 0 #0a0a15, 6px 42px 0 0 #0a0a15, 12px 42px 0 0 #0a0a15, 18px 42px 0 0 #8b0000, 24px 42px 0 0 #cc2200, 30px 42px 0 0 #8b0000, 36px 42px 0 0 #8b0000, 42px 42px 0 0 #8b0000, 48px 42px 0 0 #cc2200, 54px 42px 0 0 #8b0000, 60px 42px 0 0 #0a0a15, 66px 42px 0 0 #0a0a15, 12px 48px 0 0 #0a0a15, 18px 48px 0 0 #8b0000, 24px 48px 0 0 #8b0000, 30px 48px 0 0 #8b0000, 36px 48px 0 0 #8b0000, 42px 48px 0 0 #8b0000, 48px 48px 0 0 #8b0000, 54px 48px 0 0 #0a0a15, 6px 54px 0 0 #0a0a15, 12px 54px 0 0 #8b0000, 18px 54px 0 0 #8b0000, 24px 54px 0 0 #0a0a15, 42px 54px 0 0 #0a0a15, 48px 54px 0 0 #8b0000, 54px 54px 0 0 #8b0000, 60px 54px 0 0 #0a0a15, 0px 60px 0 0 #0a0a15, 6px 60px 0 0 #8b0000, 12px 60px 0 0 #0a0a15, 42px 60px 0 0 #0a0a15, 48px 60px 0 0 #8b0000, 54px 60px 0 0 #0a0a15, 0px 66px 0 0 #0a0a15, 6px 66px 0 0 #0a0a15, 48px 66px 0 0 #0a0a15, 54px 66px 0 0 #0a0a15`,
+  // Fallback enemy
+  enemy_default: `12px 0px 0 0 #0a0a15, 18px 0px 0 0 #2a8040, 24px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #2a8040, 18px 6px 0 0 #40c060, 24px 6px 0 0 #2a8040, 30px 6px 0 0 #0a0a15, 0px 12px 0 0 #0a0a15, 6px 12px 0 0 #2a8040, 12px 12px 0 0 #40c060, 18px 12px 0 0 #ffffff, 24px 12px 0 0 #ffffff, 30px 12px 0 0 #2a8040, 36px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #2a8040, 12px 18px 0 0 #40c060, 18px 18px 0 0 #2a8040, 24px 18px 0 0 #2a8040, 30px 18px 0 0 #2a8040, 36px 18px 0 0 #0a0a15, 6px 24px 0 0 #0a0a15, 12px 24px 0 0 #2a8040, 18px 24px 0 0 #2a8040, 24px 24px 0 0 #2a8040, 30px 24px 0 0 #0a0a15, 12px 30px 0 0 #0a0a15, 18px 30px 0 0 #0a0a15, 24px 30px 0 0 #0a0a15, 6px 36px 0 0 #0a0a15, 18px 36px 0 0 #0a0a15, 30px 36px 0 0 #0a0a15`,
+};
+
+// Zone settings
+const ZONE_SCENES = {
+  '荒野平原': { bg:'zone-plains',  enemy:'goblin',     decoL:'🌿', decoR:'🌿' },
+  '暗影森林': { bg:'zone-forest',  enemy:'goblin',     decoL:'🌲', decoR:'🌲' },
+  '地狱火山': { bg:'zone-volcano', enemy:'fire_demon', decoL:'🔥', decoR:'🔥' },
+  '冰封王座': { bg:'zone-ice',     enemy:'ice_golem',  decoL:'❄',  decoR:'❄'  },
+  '虚空裂隙': { bg:'zone-void',    enemy:'enemy_default',decoL:'💫',decoR:'💫' },
+  '神明领域': { bg:'zone-void',    enemy:'enemy_default',decoL:'✨', decoR:'✨' },
+  '末日深渊': { bg:'zone-chaos',   enemy:'fire_demon', decoL:'💀', decoR:'💀' },
+  '混沌之源': { bg:'zone-chaos',   enemy:'fire_demon', decoL:'🔱', decoR:'🔱' },
+};
+
+function initBattleScene() {
+  // Set player sprite
+  const ps=$('sprite-player');
+  if(ps){ ps.style.boxShadow=SPRITES.player; ps.style.imageRendering='pixelated'; }
+  updateBattleScene();
+}
+
+function updateBattleScene() {
+  const zone = typeof getZone==='function' ? getZone(G.stage) : {name:'荒野平原'};
+  const scene = ZONE_SCENES[zone.name] || ZONE_SCENES['荒野平原'];
+  // Update background class
+  const bg=$('scene-bg');
+  if(bg){
+    bg.className=scene.bg;
+  }
+  // Update enemy sprite
+  const es=$('sprite-enemy');
+  const bs=$('sprite-boss');
+  if(G.isBoss){
+    if(es) es.style.display='none';
+    if(bs){
+      bs.style.display='block';
+      bs.style.boxShadow=SPRITES.boss;
+    }
+  } else {
+    if(bs) bs.style.display='none';
+    if(es){
+      es.style.display='block';
+      es.style.boxShadow=SPRITES[scene.enemy]||SPRITES.enemy_default;
+    }
+  }
+  // Zone decorations
+  const dl=$('deco-left'), dr=$('deco-right');
+  if(dl) dl.textContent=scene.decoL||'';
+  if(dr) dr.textContent=scene.decoR||'';
+}
+
+function triggerAttackAnim() {
+  if(G.speed>3) return;
+  const ps=$('sprite-player');
+  if(ps){
+    ps.classList.remove('attacking');
+    void ps.offsetWidth;
+    ps.classList.add('attacking');
+    setTimeout(()=>ps.classList.remove('attacking'), 220);
+  }
+  // Slash effect
+  const slash=$('attack-slash');
+  if(slash){
+    slash.classList.remove('show');
+    void slash.offsetWidth;
+    slash.classList.add('show');
+  }
+}
+
+function triggerEnemyHurt() {
+  if(G.speed>3) return;
+  const es=G.isBoss?$('sprite-boss'):$('sprite-enemy');
+  if(es){
+    es.classList.remove('hurt');
+    void es.offsetWidth;
+    es.classList.add('hurt');
+    setTimeout(()=>es.classList.remove('hurt'), 160);
+  }
+}
+
+function updateBossPhaseGlow() {
+  const bs=$('sprite-boss'); if(!bs) return;
+  bs.className='sprite';
+  const p=G.bossPhasesDone||0;
+  if(p>=3) bs.classList.add('phase3');
+  else if(p>=2) bs.classList.add('phase2');
+  else if(p>=1) bs.classList.add('phase1');
+}
+
+window.addEventListener('load', ()=>{
+  if(!G.startTime) G.startTime=Date.now();
+  initGame();
+});
 </script>
 </body>
 </html>

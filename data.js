@@ -588,3 +588,951 @@ const MAT_DROP_TABLE = [
   ['boss_core',   5, 1, 1, 1,  false],
   ['mythic_shard',2, 1, 1, 50, true ],
 ];
+
+// ═══════════════════════════════════════════════════════
+//  GACHA SYSTEM (Phase E)
+//  Unlocks at Stage 50
+// ═══════════════════════════════════════════════════════
+
+const GACHA_CURRENCY = { name:'传说水晶', icon:'💠', desc:'抽卡货币' };
+
+const GACHA_PITY = { soft:70, hard:90 }; // pulls before guaranteed SSR
+
+const GACHA_BANNERS = [
+  {
+    id:'standard', name:'常规祈愿', icon:'🌟', type:'standard',
+    desc:'标准池 — 随时可抽',
+    cost:{ single:160, multi:1600 }, // crystals
+    rates:{ ssr:0.6, sr:5.1, r:94.3 },
+    pool:{
+      ssr:['weapon_ssr_1','weapon_ssr_2','armor_ssr_1','armor_ssr_2'],
+      sr: ['weapon_sr_1','weapon_sr_2','armor_sr_1'],
+      r:  ['mat_bundle_1','mat_bundle_2'],
+    }
+  },
+  {
+    id:'limited', name:'限定祈愿', icon:'⭐', type:'limited',
+    desc:'限定池 — 概率提升',
+    cost:{ single:160, multi:1600 },
+    rates:{ ssr:0.8, sr:6.0, r:93.2 },
+    pool:{
+      ssr:['weapon_limited_1'],
+      sr: ['weapon_sr_1','weapon_sr_2','armor_sr_1'],
+      r:  ['mat_bundle_1','mat_bundle_2'],
+    }
+  },
+];
+
+// Gacha pull results map
+const GACHA_ITEMS = {
+  weapon_ssr_1: { name:'神裁之剑',   icon:'⚔', rar:'mythic',   type:'weapon', bonus:{ atk:500 } },
+  weapon_ssr_2: { name:'雷霆战斧',   icon:'🪓', rar:'mythic',   type:'weapon', bonus:{ spd:1.0 } },
+  armor_ssr_1:  { name:'龙鳞铠甲',   icon:'🛡', rar:'mythic',   type:'body',   bonus:{ cdmg:100 } },
+  armor_ssr_2:  { name:'神明战盔',   icon:'👑', rar:'mythic',   type:'head',   bonus:{ crit:20 } },
+  weapon_limited_1:{ name:'末日审判', icon:'💀', rar:'mythic',   type:'weapon', bonus:{ atk:800, truePct:0.05 } },
+  weapon_sr_1:  { name:'精锐长剑',   icon:'⚔', rar:'legendary',type:'weapon', bonus:{ atk:200 } },
+  weapon_sr_2:  { name:'急速短刃',   icon:'🗡', rar:'legendary',type:'weapon', bonus:{ spd:0.5 } },
+  armor_sr_1:   { name:'精英铠甲',   icon:'🛡', rar:'legendary',type:'body',   bonus:{ cdmg:50 } },
+  mat_bundle_1: { name:'强化材料包', icon:'📦', rar:'rare',     type:'material',bonus:{ atk_stone:10, spd_stone:5 } },
+  mat_bundle_2: { name:'精英材料包', icon:'💎', rar:'rare',     type:'material',bonus:{ crit_stone:8, def_stone:8 } },
+};
+
+function doGachaPull(bannerId, multi=false) {
+  const banner = GACHA_BANNERS.find(b=>b.id===bannerId);
+  if(!banner) return [];
+  const cost = multi ? banner.cost.multi : banner.cost.single;
+  const pulls = multi ? 10 : 1;
+  if((G.gachaCrystals||0) < cost){ notif('传说水晶不足'); return []; }
+  G.gachaCrystals -= cost;
+  const results = [];
+  for(let i=0;i<pulls;i++){
+    G.gachaPulls=(G.gachaPulls||0)+1;
+    G.gachaPity=(G.gachaPity||0)+1;
+    let rar='r';
+    const roll=Math.random()*100;
+    if(G.gachaPity>=GACHA_PITY.hard){ rar='ssr'; G.gachaPity=0; }
+    else if(G.gachaPity>=GACHA_PITY.soft){ if(Math.random()<0.5){ rar='ssr'; G.gachaPity=0; } }
+    else if(roll<banner.rates.ssr){ rar='ssr'; G.gachaPity=0; }
+    else if(roll<banner.rates.ssr+banner.rates.sr){ rar='sr'; }
+    const pool=banner.pool[rar];
+    const itemId=pool[~~(Math.random()*pool.length)];
+    const item=GACHA_ITEMS[itemId];
+    results.push({...item, id:itemId});
+    // Apply bonus
+    if(item.type==='material'&&item.bonus){
+      for(const[k,v] of Object.entries(item.bonus)) G.upgMats[k]=(G.upgMats[k]||0)+v;
+    }
+  }
+  log('💠 祈愿×'+pulls+'：'+results.map(r=>r.name).join('、'),'loot');
+  saveGame();
+  return results;
+}
+
+// Earn crystals from boss kills
+function earnGachaCrystals(amount) {
+  G.gachaCrystals=(G.gachaCrystals||0)+amount;
+  $('gacha-crystals')&&($('gacha-crystals').textContent=G.gachaCrystals||0);
+}
+
+// ═══════════════════════════════════════════════════════
+//  SYNERGY SYSTEM (Phase F foundation)
+//  Activates when 2+ units are in team
+// ═══════════════════════════════════════════════════════
+const SYNERGIES = [
+  {
+    id:'double_atk', name:'双刃战意', icon:'⚔⚔',
+    desc:'两名战士专精：全队ATK+30%',
+    req:{ spec:'atk', count:2 },
+    effect:()=>{ G.synergyAtkMult=(G.synergyAtkMult||1)*1.30; }
+  },
+  {
+    id:'speed_chain', name:'速度共鸣', icon:'⚡⚡',
+    desc:'两名疾风专精：攻速上限+2.0',
+    req:{ spec:'spd', count:2 },
+    effect:()=>{ G.synergySpdCap=(G.synergySpdCap||0)+2.0; }
+  },
+  {
+    id:'crit_storm', name:'暴击风暴', icon:'🎯🎯',
+    desc:'两名刺客专精：暴击伤害+100%',
+    req:{ spec:'crit', count:2 },
+    effect:()=>{ G.synergyCdmg=(G.synergyCdmg||0)+100; }
+  },
+  {
+    id:'balanced', name:'均衡之道', icon:'⚖',
+    desc:'三种专精各一：所有属性+20%',
+    req:{ mixed:true },
+    effect:()=>{ G.synergyAllMult=(G.synergyAllMult||1)*1.20; }
+  },
+];
+
+function calcSynergies() {
+  // Reset
+  G.synergyAtkMult=1; G.synergySpdCap=0; G.synergyCdmg=0; G.synergyAllMult=1;
+  if(!G.units||G.units.length<2) return;
+  const specs=G.units.map(u=>u.spec).filter(Boolean);
+  SYNERGIES.forEach(syn=>{
+    if(syn.req.mixed){
+      const unique=new Set(specs).size;
+      if(unique>=3) syn.effect();
+    } else {
+      const cnt=specs.filter(s=>s===syn.req.spec).length;
+      if(cnt>=syn.req.count) syn.effect();
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+//  CONTENT EXPANSION — Stage system, enemy variety,
+//  gear paths extended to lv100, prestige system,
+//  challenge modes, daily dungeons
+// ═══════════════════════════════════════════════════════
+
+// ── EXTENDED GEAR PATHS (lv 1-100) ───────────────────
+// Each slot gets 3 paths instead of 2, paths go to lv100
+const GEAR_PATHS_EX = {
+  weapon: [
+    { id:'w_atk',   name:'屠戮之刃', icon:'⚔',  desc:'ATK暴力路线',
+      mat:'atk_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        atk:  Math.floor(12*Math.pow(1.12,i))
+      }))
+    },
+    { id:'w_spd',   name:'风刃',     icon:'💨',  desc:'SPD极限路线',
+      mat:'spd_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        spd:  +((0.06*Math.pow(1.04,i)).toFixed(3))
+      }))
+    },
+    { id:'w_crit',  name:'命运之刃', icon:'🎯',  desc:'Crit混合路线 — ATK+Crit',
+      mat:'crit_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        atk:  Math.floor(6*Math.pow(1.10,i)),
+        crit: +((0.8*Math.pow(1.06,i)).toFixed(2))
+      }))
+    },
+  ],
+  head: [
+    { id:'h_crit',  name:'猎手之眸', icon:'🎯',  desc:'暴击率极限',
+      mat:'crit_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        crit: +((1.2*Math.pow(1.07,i)).toFixed(2))
+      }))
+    },
+    { id:'h_cdmg',  name:'智慧之冠', icon:'👁',  desc:'暴击伤害极限',
+      mat:'def_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        cdmg: Math.floor(7*Math.pow(1.08,i))
+      }))
+    },
+    { id:'h_atk',   name:'战争面具', icon:'😤',  desc:'ATK+CritDmg混合',
+      mat:'atk_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        atk:  Math.floor(5*Math.pow(1.10,i)),
+        cdmg: Math.floor(4*Math.pow(1.07,i))
+      }))
+    },
+  ],
+  body: [
+    { id:'b_atk',   name:'战神铠甲', icon:'🛡',  desc:'ATK极限',
+      mat:'atk_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        atk:  Math.floor(10*Math.pow(1.12,i))
+      }))
+    },
+    { id:'b_cdmg',  name:'爆裂战袍', icon:'💥',  desc:'CritDmg极限',
+      mat:'def_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        cdmg: Math.floor(9*Math.pow(1.08,i))
+      }))
+    },
+    { id:'b_spd',   name:'轻甲战衣', icon:'🌀',  desc:'SPD+ATK混合',
+      mat:'spd_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        spd:  +((0.04*Math.pow(1.04,i)).toFixed(3)),
+        atk:  Math.floor(5*Math.pow(1.09,i))
+      }))
+    },
+  ],
+  legs: [
+    { id:'l_spd',   name:'疾风战靴', icon:'⚡',  desc:'SPD极限',
+      mat:'spd_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        spd:  +((0.08*Math.pow(1.05,i)).toFixed(3))
+      }))
+    },
+    { id:'l_crit',  name:'幸运战靴', icon:'🎲',  desc:'Crit极限',
+      mat:'crit_stone',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(2*Math.pow(1.35,i)),
+        crit: +((1.8*Math.pow(1.07,i)).toFixed(2))
+      }))
+    },
+    { id:'l_all',   name:'混沌战靴', icon:'🌑',  desc:'SPD+Crit+CritDmg全混合',
+      mat:'boss_core',
+      levels: Array.from({length:100}, (_,i)=>({
+        cost: Math.floor(1*Math.pow(1.4,i)),
+        spd:  +((0.03*Math.pow(1.04,i)).toFixed(3)),
+        crit: +((0.6*Math.pow(1.06,i)).toFixed(2)),
+        cdmg: Math.floor(3*Math.pow(1.07,i))
+      }))
+    },
+  ],
+};
+
+// Override GEAR_PATHS with extended version
+Object.assign(GEAR_PATHS, GEAR_PATHS_EX);
+
+// ── EXTENDED BOSS PATH (lv 1-50) ──────────────────────
+const BOSS_PATH_EX = {
+  id:'boss_core_path', name:'霸主强化', icon:'💀',
+  desc:'全属性提升，越强越快',
+  mat:'boss_core',
+  levels: Array.from({length:50}, (_,i)=>({
+    cost:      Math.floor(1*Math.pow(1.5,i)),
+    allPct:    +((4*Math.pow(1.06,i)).toFixed(2))
+  }))
+};
+Object.assign(BOSS_PATH, BOSS_PATH_EX);
+
+// ── MYTHIC PATH (unlocked after lv100 gear + 3rd awakening) ──
+const MYTHIC_PATH = {
+  id:'mythic_path', name:'神话之路', icon:'🌠',
+  desc:'神话碎片强化 — 超越极限',
+  mat:'mythic_shard',
+  levels: Array.from({length:30}, (_,i)=>({
+    cost:   Math.floor(1*Math.pow(1.6,i)),
+    allPct: +((10*Math.pow(1.08,i)).toFixed(2)),
+    truePct:+((0.1*Math.pow(1.05,i)).toFixed(3))
+  }))
+};
+
+// ── STAGE ZONES (every 50 stages = new zone, new enemy skin) ──
+const STAGE_ZONES = [
+  { from:1,   to:50,  name:'荒野平原', icon:'🌾', bgColor:'rgba(80,60,20,.08)',  enemyMult:1.0 },
+  { from:51,  to:100, name:'暗影森林', icon:'🌲', bgColor:'rgba(20,80,30,.10)',  enemyMult:1.3 },
+  { from:101, to:200, name:'地狱火山', icon:'🌋', bgColor:'rgba(120,30,10,.12)', enemyMult:1.8 },
+  { from:201, to:350, name:'冰封王座', icon:'❄',  bgColor:'rgba(20,60,120,.12)', enemyMult:2.5 },
+  { from:351, to:500, name:'虚空裂隙', icon:'🌌', bgColor:'rgba(80,20,120,.12)', enemyMult:3.5 },
+  { from:501, to:750, name:'神明领域', icon:'✨',  bgColor:'rgba(120,100,20,.12)',enemyMult:5.0 },
+  { from:751, to:999, name:'末日深渊', icon:'💀',  bgColor:'rgba(60,0,0,.15)',    enemyMult:8.0 },
+  { from:1000,to:Infinity,name:'混沌之源',icon:'🔱',bgColor:'rgba(100,50,150,.15)',enemyMult:15.0 },
+];
+
+function getZone(stage) {
+  return STAGE_ZONES.find(z=>stage>=z.from&&stage<=z.to) || STAGE_ZONES[0];
+}
+
+// ── PRESTIGE SYSTEM ────────────────────────────────────
+// After beating Stage 500, player can "prestige"
+// Resets stage/level but keeps gear levels and adds permanent prestige bonus
+const PRESTIGE_BONUSES = [
+  { mult:1.5,  desc:'全属性×1.5' },
+  { mult:2.0,  desc:'全属性×2.0' },
+  { mult:3.0,  desc:'全属性×3.0，解锁神话路线' },
+  { mult:5.0,  desc:'全属性×5.0' },
+  { mult:10.0, desc:'全属性×10.0，称号：混沌领主' },
+];
+
+// ── CHALLENGE MODES ────────────────────────────────────
+const CHALLENGES = [
+  {
+    id:'speed_kill', name:'极速斩杀', icon:'⚡',
+    desc:'在10秒内击败敌人，否则失败',
+    modifier:{ timeLimit:10 },
+    reward:{ crystals:50, bossCore:5 },
+    unlockStage:20
+  },
+  {
+    id:'no_crit', name:'无暴击挑战', icon:'🚫',
+    desc:'关闭暴击，ATK×5',
+    modifier:{ noCrit:true, atkMult:5 },
+    reward:{ crystals:100, mythicShard:1 },
+    unlockStage:50
+  },
+  {
+    id:'one_shot', name:'一击必杀', icon:'💥',
+    desc:'只能攻击一次，必须一击秒杀',
+    modifier:{ oneShot:true, dmgMult:50 },
+    reward:{ crystals:200, mythicShard:2 },
+    unlockStage:100
+  },
+  {
+    id:'infinite', name:'无尽冲关', icon:'♾',
+    desc:'无限时间，测试最高可达Stage',
+    modifier:{ infinite:true },
+    reward:{ crystals:10 }, // per stage
+    unlockStage:50
+  },
+  {
+    id:'glass_cannon', name:'玻璃大炮', icon:'💣',
+    desc:'ATK×20但SPD固定0.5',
+    modifier:{ atkMult:20, fixedSpd:0.5 },
+    reward:{ crystals:80, bossCore:10 },
+    unlockStage:30
+  },
+];
+
+// ── DAILY DUNGEONS ─────────────────────────────────────
+const DUNGEONS = [
+  {
+    id:'atk_dungeon',  name:'攻击深渊', icon:'⚔', desc:'ATK为主，掉落大量攻击石',
+    stages:10, matReward:'atk_stone', matAmt:30, crystalReward:20,
+    unlockStage:10
+  },
+  {
+    id:'spd_dungeon',  name:'疾风迷宫', icon:'⚡', desc:'SPD考验，掉落大量速度石',
+    stages:10, matReward:'spd_stone', matAmt:30, crystalReward:20,
+    unlockStage:20
+  },
+  {
+    id:'crit_dungeon', name:'命运祭坛', icon:'🎯', desc:'暴击地狱，掉落大量暴击石',
+    stages:10, matReward:'crit_stone', matAmt:30, crystalReward:20,
+    unlockStage:30
+  },
+  {
+    id:'boss_dungeon',  name:'Boss巢穴', icon:'💀', desc:'全Boss，掉落大量Boss核心',
+    stages:5, matReward:'boss_core', matAmt:20, crystalReward:50,
+    unlockStage:50
+  },
+  {
+    id:'mythic_dungeon',name:'神话圣殿', icon:'🌠', desc:'极限挑战，神话碎片奖励',
+    stages:3, matReward:'mythic_shard', matAmt:5, crystalReward:100,
+    unlockStage:200
+  },
+];
+
+// ── EXTENDED ACHIEVEMENTS (60 total) ──────────────────
+const ACHS_EX = [
+  // Stage milestones
+  { id:'s300',  icon:'🌋', n:'火山征服者',  d:'到达Stage 300',  f:()=>G.best>=300 },
+  { id:'s500',  icon:'❄',  n:'冰封王者',    d:'到达Stage 500',  f:()=>G.best>=500 },
+  { id:'s750',  icon:'🌌', n:'虚空行者',    d:'到达Stage 750',  f:()=>G.best>=750 },
+  { id:'s1000', icon:'🔱', n:'混沌之神',    d:'到达Stage 1000', f:()=>G.best>=1000 },
+  // Gear mastery
+  { id:'gear20',  icon:'⚔', n:'武器大师',    d:'任意装备强化至Lv.20', f:()=>G.gear&&Object.values(G.gear).some(g=>(g.pathLv||0)>=20) },
+  { id:'gear50',  icon:'🗡', n:'传说工匠',    d:'任意装备强化至Lv.50', f:()=>G.gear&&Object.values(G.gear).some(g=>(g.pathLv||0)>=50) },
+  { id:'gear100', icon:'🌠', n:'神话锻造师',  d:'任意装备强化至Lv.100',f:()=>G.gear&&Object.values(G.gear).some(g=>(g.pathLv||0)>=100) },
+  { id:'allgear10',icon:'🛡',n:'全副武装10', d:'所有装备≥Lv.10', f:()=>G.gear&&Object.values(G.gear).every(g=>(g.pathLv||0)>=10) },
+  { id:'allgear50',icon:'👑',n:'神装齐备',   d:'所有装备≥Lv.50', f:()=>G.gear&&Object.values(G.gear).every(g=>(g.pathLv||0)>=50) },
+  // Boss kills
+  { id:'boss100',  icon:'💀', n:'百Boss猎人',  d:'击败100个Boss',   f:()=>G.bossKills>=100 },
+  { id:'boss500',  icon:'☠',  n:'Boss屠夫',    d:'击败500个Boss',   f:()=>G.bossKills>=500 },
+  { id:'boss1000', icon:'🏴',  n:'Boss终结者',  d:'击败1000个Boss',  f:()=>G.bossKills>=1000 },
+  // Damage
+  { id:'dmg1b',   icon:'💣', n:'十亿伤害',    d:'单次造成10亿伤害', f:()=>G.lastDmg>=1e9 },
+  { id:'dmg1t',   icon:'☄',  n:'万亿伤害',    d:'单次造成1万亿伤害',f:()=>G.lastDmg>=1e12 },
+  { id:'totdmg1t',icon:'🌋', n:'伤害狂魔',    d:'总伤害超过1万亿',  f:()=>G.totalDmg>=1e12 },
+  // Combo
+  { id:'combo25', icon:'🔥', n:'25连暴击',    d:'达到25连击暴击',   f:()=>G.bestCombo>=25 },
+  { id:'combo50', icon:'🌟', n:'50连暴击',    d:'达到50连击暴击',   f:()=>G.bestCombo>=50 },
+  // Gold
+  { id:'gold1m',  icon:'💰', n:'百万富翁',    d:'持有100万金币',    f:()=>G.gold>=1000000 },
+  { id:'gold1b',  icon:'💎', n:'亿万富翁',    d:'持有10亿金币',     f:()=>G.gold>=1e9 },
+  // Prestige
+  { id:'pres1',   icon:'🌅', n:'重生之路',    d:'完成第一次转生',   f:()=>(G.prestigeCount||0)>=1 },
+  { id:'pres3',   icon:'🌄', n:'三度轮回',    d:'完成3次转生',      f:()=>(G.prestigeCount||0)>=3 },
+  { id:'pres5',   icon:'♾', n:'永恒轮回者',  d:'完成5次转生',      f:()=>(G.prestigeCount||0)>=5 },
+  // Gacha
+  { id:'pull10',  icon:'💠', n:'初次祈愿',    d:'祈愿10次',         f:()=>(G.gachaPulls||0)>=10 },
+  { id:'pull100', icon:'⭐', n:'祈愿百次',    d:'祈愿100次',        f:()=>(G.gachaPulls||0)>=100 },
+  { id:'pull500', icon:'🌟', n:'氪金勇士',    d:'祈愿500次',        f:()=>(G.gachaPulls||0)>=500 },
+  // Speed
+  { id:'spd5',    icon:'⚡', n:'速度之神',    d:'攻速达到5.0',      f:()=>G.atkSpd>=5.0 },
+  { id:'spd8',    icon:'🌪', n:'光速战士',    d:'攻速达到8.0',      f:()=>G.atkSpd>=8.0 },
+  // Awakening
+  { id:'awk2',    icon:'🌅', n:'二度觉醒',    d:'完成第2次觉醒',    f:()=>G.awakenings>=2 },
+  // Skills
+  { id:'skill10', icon:'📚', n:'技能精通',    d:'学会10个技能',     f:()=>G.skills.length>=10 },
+  { id:'skill30', icon:'📖', n:'技能宗师',    d:'学会所有30个技能', f:()=>G.skills.length>=30 },
+  // Train
+  { id:'train5k', icon:'💪', n:'刻苦训练',    d:'Train 5000次',     f:()=>G.trainN>=5000 },
+  { id:'train10k',icon:'🏆', n:'训练之神',    d:'Train 10000次',    f:()=>G.trainN>=10000 },
+  // Streak
+  { id:'str25',   icon:'🔥', n:'25连胜大师',  d:'连胜25场',         f:()=>G.bestStreak>=25 },
+  { id:'str50',   icon:'⚡', n:'50连胜传说',  d:'连胜50场',         f:()=>G.bestStreak>=50 },
+  // ATK
+  { id:'atk100k', icon:'💥', n:'十万ATK',     d:'总ATK≥100,000',    f:()=>totalAtk()>=100000 },
+  { id:'atk1m',   icon:'🌋', n:'百万ATK',     d:'总ATK≥1,000,000',  f:()=>totalAtk()>=1000000 },
+  // Materials
+  { id:'mat1k',   icon:'🪨', n:'材料囤积',    d:'任意材料达1000',   f:()=>Object.values(G.upgMats||{}).some(v=>v>=1000) },
+  { id:'boss100c',icon:'💀', n:'Boss核心大师',d:'获得100个Boss核心',f:()=>(G.upgMats?.boss_core||0)>=100 },
+];
+
+// Merge with existing ACHS
+ACHS.push(...ACHS_EX);
+
+// ── EXTENDED MILESTONES ────────────────────────────────
+const MILESTONES_EX = [
+  { stage:250,  atk:2000,  crit:10,   desc:'ATK+2000 · Crit+10%' },
+  { stage:300,  atkMult:1.5,          desc:'ATK×1.5' },
+  { stage:400,  atk:5000,  cdmg:100,  desc:'ATK+5000 · CritDmg+100%' },
+  { stage:500,  atkMult:2, spd:1.0,   desc:'ATK×2 · SPD+1.0 · 可转生' },
+  { stage:600,  atk:20000,            desc:'ATK+20000' },
+  { stage:700,  atkMult:2, crit:20,   desc:'ATK×2 · Crit+20%' },
+  { stage:800,  atk:50000, cdmg:200,  desc:'ATK+50000 · CritDmg+200%' },
+  { stage:900,  atkMult:3,            desc:'ATK×3' },
+  { stage:1000, atkMult:5, spd:2.0,   desc:'ATK×5 · SPD+2.0 · 神话觉醒' },
+];
+MILESTONES.push(...MILESTONES_EX);
+
+// ── EXTENDED DAILY TASKS (14 total pool) ───────────────
+const DAILY_POOL_EX = [
+  { id:'d8',  n:'精英猎手',   d:'击败10个精英怪',      target:10, key:'eliteKills',  reward:{ gold:1500, mat:'boss_core', matAmt:2 } },
+  { id:'d9',  n:'材料收集',   d:'收集50个攻击石',       target:50, key:'atkStoneColl', reward:{ gold:1000, mat:'rare', matAmt:3 } },
+  { id:'d10', n:'超级连击',   d:'达到20连击暴击',       target:20, key:'bestCombo',    reward:{ gold:2000, mat:'epic', matAmt:2 } },
+  { id:'d11', n:'关卡挑战',   d:'到达Stage 30以上',     target:30, key:'stage',        reward:{ gold:3000, mat:'boss_core', matAmt:3 } },
+  { id:'d12', n:'黄金猎手II', d:'获得20000金币',        target:20000,key:'goldEarned', reward:{ gold:2000, mat:'rare', matAmt:5 } },
+  { id:'d13', n:'强化专家',   d:'强化装备10次',         target:10, key:'upgradeCount', reward:{ gold:2500, mat:'epic', matAmt:2 } },
+  { id:'d14', n:'连胜战士',   d:'连胜15场',             target:15, key:'streak',       reward:{ gold:3000, mat:'boss_core', matAmt:5 } },
+];
+DAILY_POOL.push(...DAILY_POOL_EX);
+
+// ── PRESTIGE (转生) SYSTEM ─────────────────────────────
+function canPrestige() {
+  return G.best >= 500;
+}
+
+function doPrestige() {
+  if(!canPrestige()) { notif('需要到达Stage 500'); return; }
+  const n = (G.prestigeCount||0);
+  const bonus = PRESTIGE_BONUSES[Math.min(n, PRESTIGE_BONUSES.length-1)];
+  G.prestigeCount = n + 1;
+  G.prestigeMult = (G.prestigeMult||1) * bonus.mult;
+  // Reset progress
+  G.level=1; G.exp=0; G.expNeed=EXP_TABLE[1];
+  G.stage=1; G.baseAtk=Math.floor(G.baseAtk*0.1+10);
+  G.atkSpd=1.0; G.critChance=5; G.critDmg=200;
+  G.tAtk=0; G.tN=0; G.tCrit=0; G.tSpd=0;
+  G.bonusAtk=0; G.skillBonusAtk=0;
+  G.streak=0; G.combo=0;
+  // Keep: gear levels, gacha items, awakenings, prestige bonuses
+  log('🔱 转生！获得 '+bonus.desc,'boss');
+  notif('🔱 转生完成！'+bonus.desc,'#c9a84c');
+}
+
+// ═══════════════════════════════════════════════════════
+//  BIG CONTENT EXPANSION 2
+// ═══════════════════════════════════════════════════════
+
+// ── 12 MORE TALENTS (total 30) ─────────────────────────
+const TALENTS_EX = [
+  { id:'vampire',    icon:'🧛', name:'吸血鬼',     desc:'每次攻击回复ATK×1%的金币',
+    onHit:()=>{ G.gold+=Math.floor(totalAtk()*0.01); } },
+  { id:'berserker',  icon:'🐗', name:'狂猪',       desc:'HP低于50%时ATK×3，但时间-20秒',
+    dmgMult:(pct)=>pct<0.5?3:1, timePenalty:20 },
+  { id:'sniper',     icon:'🎯', name:'狙击手',     desc:'每10次攻击必然暴击，暴击伤害×3',
+    state:{ counter:0 },
+    onHit:(c)=>{
+      const s=TALENTS.find(t=>t.id==='sniper')?.state||{counter:0};
+      if(!c){ s.counter++; if(s.counter>=10){ s.counter=0; return true; } } return false;
+    }
+  },
+  { id:'berserker2', icon:'🔥', name:'战意高昂',   desc:'每连胜+10%ATK，最高+300%',
+    atkBonus:()=>Math.min((G.streak||0)*0.10, 3.0) },
+  { id:'tank',       icon:'🛡', name:'铁壁',       desc:'每次被攻击（失败）+50 ATK永久',
+    onLose:()=>{ G.tAtk+=50; G.tN++; } },
+  { id:'gambler',    icon:'🎲', name:'赌徒',       desc:'50%概率ATK×5，50%概率ATK×0.2',
+    dmgMult:()=>Math.random()<0.5?5:0.2 },
+  { id:'scholar',    icon:'📚', name:'学者',       desc:'每次升级永久+5%ATK',
+    onLevelUp:()=>{ G.tAtk+=Math.floor(totalAtk()*0.05); G.tN++; } },
+  { id:'collector',  icon:'💎', name:'收藏家',     desc:'每收集1个材料永久+0.5 ATK',
+    passive:true },
+  { id:'warlord',    icon:'⚔', name:'战争领主',   desc:'每10次Boss击杀 ATK×1.1',
+    passive:true },
+  { id:'shadow',     icon:'🌑', name:'暗影',       desc:'普攻有5%概率造成1000%伤害',
+    onHit:()=>Math.random()<0.05?{proc:true,dmgMult:10,label:'🌑 暗影！'}:{proc:false} },
+  { id:'speedster',  icon:'⚡', name:'极速',       desc:'每次攻击SPD+0.001，无上限',
+    onHit:()=>{ G.atkSpd+=0.001; } },
+  { id:'godhand',    icon:'✋', name:'神之手',     desc:'每次暴击+1金币×关卡数',
+    onHit:(c)=>{ if(c) G.gold+=G.stage; } },
+];
+TALENTS.push(...TALENTS_EX);
+
+// ── EXPANDED GACHA POOL (40+ items) ───────────────────
+const GACHA_ITEMS_EX = {
+  // SSR Weapons
+  weapon_ssr_3: { name:'时间裂缝',    icon:'⏳', rar:'mythic',   type:'weapon', bonus:{ spd:2.0, crit:15 } },
+  weapon_ssr_4: { name:'混沌之刃',    icon:'🌀', rar:'mythic',   type:'weapon', bonus:{ atk:1000, cdmg:150 } },
+  weapon_ssr_5: { name:'龙神之枪',    icon:'🐉', rar:'mythic',   type:'weapon', bonus:{ atk:600, spd:1.0, crit:10 } },
+  // SSR Armor
+  armor_ssr_3:  { name:'虚空战甲',    icon:'🌌', rar:'mythic',   type:'body',   bonus:{ atk:400, cdmg:200 } },
+  armor_ssr_4:  { name:'天使羽翼',    icon:'👼', rar:'mythic',   type:'head',   bonus:{ crit:30, cdmg:100 } },
+  armor_ssr_5:  { name:'恶魔战靴',    icon:'😈', rar:'mythic',   type:'legs',   bonus:{ spd:1.5, crit:20 } },
+  // Limited
+  weapon_limited_2: { name:'世界终结者', icon:'💥', rar:'mythic', type:'weapon', bonus:{ atk:2000, truePct:0.10 } },
+  armor_limited_1:  { name:'神明铠甲',   icon:'👑', rar:'mythic', type:'body',   bonus:{ cdmg:300, allPct:0.50 } },
+  // SR items
+  weapon_sr_3:  { name:'刺客短剑',    icon:'🗡', rar:'legendary',type:'weapon', bonus:{ crit:10, cdmg:50 } },
+  weapon_sr_4:  { name:'暴君战戟',    icon:'🔱', rar:'legendary',type:'weapon', bonus:{ atk:300, spd:0.3 } },
+  weapon_sr_5:  { name:'疾风之弓',    icon:'🏹', rar:'legendary',type:'weapon', bonus:{ spd:0.8, crit:8 } },
+  armor_sr_2:   { name:'英雄铠甲',    icon:'🛡', rar:'legendary',type:'body',   bonus:{ atk:200, cdmg:80 } },
+  armor_sr_3:   { name:'智者战盔',    icon:'🎓', rar:'legendary',type:'head',   bonus:{ crit:12, cdmg:60 } },
+  armor_sr_4:   { name:'神行战靴',    icon:'👟', rar:'legendary',type:'legs',   bonus:{ spd:0.6, crit:10 } },
+  // Material packs
+  mat_bundle_3: { name:'Boss核心礼包',icon:'💀', rar:'rare', type:'material', bonus:{ boss_core:20 } },
+  mat_bundle_4: { name:'神话碎片包',  icon:'🌠', rar:'rare', type:'material', bonus:{ mythic_shard:3 } },
+  mat_bundle_5: { name:'全材料大礼包',icon:'🎁', rar:'epic', type:'material', bonus:{ atk_stone:30, spd_stone:30, crit_stone:30, def_stone:30 } },
+};
+Object.assign(GACHA_ITEMS, GACHA_ITEMS_EX);
+
+// Update banner pools with new items
+GACHA_BANNERS[0].pool.ssr.push('weapon_ssr_3','weapon_ssr_4','weapon_ssr_5','armor_ssr_3','armor_ssr_4','armor_ssr_5');
+GACHA_BANNERS[0].pool.sr.push('weapon_sr_3','weapon_sr_4','weapon_sr_5','armor_sr_2','armor_sr_3','armor_sr_4');
+GACHA_BANNERS[0].pool.r.push('mat_bundle_3','mat_bundle_4','mat_bundle_5');
+
+// Add limited banner 2
+GACHA_BANNERS.push({
+  id:'weapon_limited', name:'武器限定', icon:'⚔', type:'limited',
+  desc:'武器限定池 — 武器SSR概率提升',
+  cost:{ single:160, multi:1600 },
+  rates:{ ssr:1.0, sr:6.0, r:93.0 },
+  pool:{
+    ssr:['weapon_limited_2','weapon_ssr_3','weapon_ssr_4','weapon_ssr_5'],
+    sr: ['weapon_sr_3','weapon_sr_4','weapon_sr_5'],
+    r:  ['mat_bundle_3','mat_bundle_4'],
+  }
+});
+
+// ── EXPANDED SHOP (30 items) ──────────────────────────
+const SHOP_EX = [
+  { id:'smat1', n:'ATK石礼包×10',  d:'10x攻击石',        icon:'🔴', c:()=>500,   b:()=>{ G.upgMats.atk_stone+=10; } },
+  { id:'smat2', n:'SPD石礼包×10',  d:'10x速度石',        icon:'⚡', c:()=>500,   b:()=>{ G.upgMats.spd_stone+=10; } },
+  { id:'smat3', n:'CRIT石礼包×10', d:'10x暴击石',        icon:'🎯', c:()=>500,   b:()=>{ G.upgMats.crit_stone+=10; } },
+  { id:'smat4', n:'DEF石礼包×10',  d:'10x韧性石',        icon:'🛡', c:()=>500,   b:()=>{ G.upgMats.def_stone+=10; } },
+  { id:'smat5', n:'Boss核心×3',    d:'3x Boss核心',      icon:'💀', c:()=>2000,  b:()=>{ G.upgMats.boss_core+=3; } },
+  { id:'smat6', n:'全材料礼包',    d:'各5x所有材料',     icon:'🎁', c:()=>3000,  b:()=>{ Object.keys(G.upgMats).forEach(k=>{ G.upgMats[k]+=5; }); } },
+  { id:'scrys', n:'传说水晶×50',   d:'50x祈愿货币',      icon:'💠', c:()=>5000,  b:()=>{ G.gachaCrystals+=50; } },
+  { id:'sexp1', n:'EXP大爆发',     d:'×10 EXP',          icon:'📖', c:()=>1000,  b:()=>{ gainExp(G.expNeed*10); } },
+  { id:'satk2', n:'ATK大强化',     d:'永久+200 ATK',     icon:'⚔', c:()=>Math.floor(2000*G.level), b:()=>{ G.baseAtk+=200; log('⚔ ATK+200','ev'); } },
+  { id:'sspd2', n:'SPD强化',       d:'永久+0.5 SPD',     icon:'⚡', c:()=>3000,  b:()=>{ G.atkSpd=Math.min(G.atkSpd+0.5,spdCap()); } },
+  { id:'scrit2',n:'Crit大强化',    d:'永久+10% Crit',    icon:'🎯', c:()=>2500,  b:()=>{ G.critChance+=10; } },
+  { id:'scdmg2',n:'CritDmg强化',   d:'永久+50% CritDmg', icon:'💥', c:()=>2000,  b:()=>{ G.critDmg+=50; } },
+  { id:'smyth', n:'神话碎片',      d:'1x神话碎片',       icon:'🌠', c:()=>20000, b:()=>{ G.upgMats.mythic_shard+=1; } },
+];
+SHOP_CATALOG.push(...SHOP_EX);
+
+// ── OFFLINE INCOME TABLE ──────────────────────────────
+// More generous offline gains based on stage
+function calcOfflineGains(seconds) {
+  const mins = seconds / 60;
+  const zone = typeof getZone==='function' ? getZone(G.stage) : {enemyMult:1};
+  const baseMats = {
+    atk_stone:  Math.floor(mins * 0.5 * zone.enemyMult),
+    spd_stone:  Math.floor(mins * 0.4 * zone.enemyMult),
+    crit_stone: Math.floor(mins * 0.3 * zone.enemyMult),
+    def_stone:  Math.floor(mins * 0.3 * zone.enemyMult),
+    boss_core:  Math.floor(mins * 0.05 * zone.enemyMult),
+  };
+  const gold = Math.floor(totalAtk() * totalSpd() * mins * 2);
+  const exp  = Math.floor(G.stage * mins * 0.5);
+  return { gold, exp, mats: baseMats };
+}
+
+// ═══════════════════════════════════════════════════════
+//  VERSION 3 CONTENT EXPANSION
+// ═══════════════════════════════════════════════════════
+
+// ── RUNE SYSTEM ───────────────────────────────────────
+// Runes drop from Boss kills, slot into character (not gear)
+// 6 rune slots, each gives a unique passive bonus
+const RUNES = [
+  // ATK runes
+  { id:'r_atk1',    name:'力量符文I',   icon:'🔴', tier:1, desc:'ATK+50',         effect:()=>{ G.runeAtk=(G.runeAtk||0)+50; } },
+  { id:'r_atk2',    name:'力量符文II',  icon:'🔴', tier:2, desc:'ATK+200',        effect:()=>{ G.runeAtk=(G.runeAtk||0)+200; } },
+  { id:'r_atk3',    name:'力量符文III', icon:'🔴', tier:3, desc:'ATK+1000',       effect:()=>{ G.runeAtk=(G.runeAtk||0)+1000; } },
+  { id:'r_atk4',    name:'毁灭符文',    icon:'💢', tier:4, desc:'ATK+5000',       effect:()=>{ G.runeAtk=(G.runeAtk||0)+5000; } },
+  // SPD runes
+  { id:'r_spd1',    name:'速度符文I',   icon:'🟡', tier:1, desc:'SPD+0.2',        effect:()=>{ G.runeSpd=(G.runeSpd||0)+0.2; } },
+  { id:'r_spd2',    name:'速度符文II',  icon:'🟡', tier:2, desc:'SPD+0.5',        effect:()=>{ G.runeSpd=(G.runeSpd||0)+0.5; } },
+  { id:'r_spd3',    name:'疾风符文',    icon:'⚡', tier:3, desc:'SPD+1.5',        effect:()=>{ G.runeSpd=(G.runeSpd||0)+1.5; } },
+  // CRIT runes
+  { id:'r_crit1',   name:'暴击符文I',   icon:'🟠', tier:1, desc:'Crit+5%',        effect:()=>{ G.runeCrit=(G.runeCrit||0)+5; } },
+  { id:'r_crit2',   name:'暴击符文II',  icon:'🟠', tier:2, desc:'Crit+15%',       effect:()=>{ G.runeCrit=(G.runeCrit||0)+15; } },
+  { id:'r_cdmg1',   name:'爆破符文I',   icon:'🟤', tier:1, desc:'CritDmg+30%',    effect:()=>{ G.runeCdmg=(G.runeCdmg||0)+30; } },
+  { id:'r_cdmg2',   name:'爆破符文II',  icon:'🟤', tier:2, desc:'CritDmg+100%',   effect:()=>{ G.runeCdmg=(G.runeCdmg||0)+100; } },
+  // Special runes
+  { id:'r_gold',    name:'财富符文',    icon:'💰', tier:2, desc:'金币获得+50%',   effect:()=>{ G.runeGoldMult=(G.runeGoldMult||0)+0.5; } },
+  { id:'r_true',    name:'真伤符文',    icon:'💀', tier:3, desc:'每击额外1%最大HP真伤', effect:()=>{ G.runeTruePct=(G.runeTruePct||0)+0.01; } },
+  { id:'r_combo',   name:'连击符文',    icon:'🔥', tier:3, desc:'每连击+3%ATK（无上限）', effect:()=>{ G.runeComboBonus=true; } },
+  { id:'r_time',    name:'时间符文',    icon:'⏳', tier:2, desc:'战斗时间+30秒',  effect:()=>{ G.runeTime=(G.runeTime||0)+30; } },
+  { id:'r_mythic',  name:'神话符文',    icon:'🌠', tier:4, desc:'所有属性+25%',   effect:()=>{ G.runeMythicMult=(G.runeMythicMult||0)+0.25; } },
+  { id:'r_prestige',name:'转生符文',    icon:'🔱', tier:4, desc:'转生倍率额外×1.5', effect:()=>{ G.runePrestigeMult=(G.runePrestigeMult||1)*1.5; } },
+];
+
+const RUNE_SLOTS = 6;
+const RUNE_DROP_CHANCE = 0.15; // 15% per boss kill
+
+// ── TITLE SYSTEM ──────────────────────────────────────
+const TITLES = [
+  { id:'t_novice',   name:'新手冒险者',  icon:'👶', req:()=>G.best>=1 },
+  { id:'t_fighter',  name:'战士',        icon:'⚔',  req:()=>G.best>=10 },
+  { id:'t_warrior',  name:'战斗者',      icon:'🗡',  req:()=>G.best>=25 },
+  { id:'t_veteran',  name:'老兵',        icon:'🏅',  req:()=>G.best>=50 },
+  { id:'t_hero',     name:'英雄',        icon:'👑',  req:()=>G.best>=100 },
+  { id:'t_legend',   name:'传说英雄',    icon:'⭐',  req:()=>G.best>=200 },
+  { id:'t_myth',     name:'神话勇者',    icon:'🌟',  req:()=>G.best>=500 },
+  { id:'t_god',      name:'战神',        icon:'🔱',  req:()=>G.best>=1000 },
+  { id:'t_train10k', name:'训练狂魔',    icon:'💪',  req:()=>G.trainN>=10000 },
+  { id:'t_boss1k',   name:'Boss终结者',  icon:'💀',  req:()=>G.bossKills>=1000 },
+  { id:'t_crit50',   name:'暴击之神',    icon:'🎯',  req:()=>G.bestCombo>=50 },
+  { id:'t_rich',     name:'亿万富翁',    icon:'💎',  req:()=>G.gold>=1e9 },
+  { id:'t_prestige', name:'轮回者',      icon:'🌅',  req:()=>(G.prestigeCount||0)>=1 },
+  { id:'t_awakened', name:'觉醒者',      icon:'✨',  req:()=>G.awakenings>=3 },
+  { id:'t_gacha100', name:'氪金战士',    icon:'💠',  req:()=>(G.gachaPulls||0)>=100 },
+  { id:'t_all_gear', name:'神装具现',    icon:'🛡',  req:()=>G.gear&&Object.values(G.gear).every(g=>(g.pathLv||0)>=50) },
+];
+
+// ── WEEKLY BOSS ───────────────────────────────────────
+const WEEKLY_BOSS = {
+  id:'weekly_boss',
+  name:'周常Boss',
+  icon:'👹',
+  desc:'每周一次 — 极强Boss，巨额奖励',
+  hpMult:50,
+  timeBonusSec:120,
+  reward:{
+    crystals:500,
+    boss_core:50,
+    mythic_shard:5,
+    gold:100000,
+  },
+  phases:[
+    { at:0.75, name:'第一阶段', atkMult:1.5, msg:'Boss进入愤怒！ATK×1.5！' },
+    { at:0.50, name:'第二阶段', atkMult:2.0, msg:'Boss狂暴！ATK×2！' },
+    { at:0.25, name:'第三阶段', atkMult:3.0, msg:'最终形态！ATK×3！' },
+  ]
+};
+
+// ── STAGE MODIFIERS ───────────────────────────────────
+// Every 7 stages, a random modifier applies
+const STAGE_MODIFIERS = [
+  { id:'double_hp',   name:'钢铁之躯',  icon:'🛡', desc:'敌人HP×2',         apply:(max)=>max*2 },
+  { id:'fast_time',   name:'时间加速',  icon:'⏩', desc:'战斗时间减半',     applyTime:(t)=>Math.ceil(t/2) },
+  { id:'no_crit',     name:'磁场干扰',  icon:'🚫', desc:'本关Crit无效',     noCrit:true },
+  { id:'gold_boost',  name:'黄金之地',  icon:'💰', desc:'金币×3',           goldMult:3 },
+  { id:'mat_boost',   name:'材料宝库',  icon:'📦', desc:'材料掉落×3',       matMult:3 },
+  { id:'crit_boost',  name:'命运时刻',  icon:'⭐', desc:'暴击伤害×2',       critDmgMult:2 },
+  { id:'regen',       name:'自我修复',  icon:'💚', desc:'敌人每秒回3%HP',   regenPct:0.03 },
+  { id:'shield_wall', name:'盾墙',      icon:'🏰', desc:'敌人有20%HP护盾',  shieldPct:0.2 },
+  { id:'berserk_all', name:'全员狂暴',  icon:'😤', desc:'所有属性×1.5但敌人HP×3', allMult:1.5, hpMult:3 },
+  { id:'treasure',    name:'宝藏关卡',  icon:'💎', desc:'Boss核心×5掉落',   bonusBossCore:5 },
+];
+
+// ── COMBO SKILLS (triggered at certain combo counts) ──
+const COMBO_SKILLS = [
+  { at:5,   name:'五连冲击',  icon:'5️⃣', desc:'下次攻击×2伤害',     dmgMult:2 },
+  { at:10,  name:'十连爆发',  icon:'🔟', desc:'下次攻击×5伤害',     dmgMult:5 },
+  { at:25,  name:'四分之一神',icon:'💫', desc:'下次攻击×10伤害',    dmgMult:10 },
+  { at:50,  name:'半神',      icon:'⚡', desc:'下次攻击×25伤害',    dmgMult:25 },
+  { at:100, name:'神之触碰',  icon:'✋', desc:'下次攻击×100伤害',   dmgMult:100 },
+];
+
+// ── GEAR EVOLUTION ────────────────────────────────────
+// After gear reaches Lv.50 + boss_core Lv.20 = can evolve
+// Evolution resets path to 0 but gives permanent ×2 multiplier
+const GEAR_EVOLUTION_REQ = { pathLv:50, bossLv:20 };
+const GEAR_EVOLUTION_BONUS = { mult:2.0, desc:'属性全部×2，但等级重置' };
+
+// ── AUTO-UPGRADE SYSTEM ───────────────────────────────
+// Player can set auto-upgrade priority for gear
+const AUTO_UPGRADE_MODES = [
+  { id:'off',      name:'关闭',     desc:'不自动强化' },
+  { id:'cheapest', name:'最便宜',   desc:'优先强化费用最低的路线' },
+  { id:'slot',     name:'指定槽位', desc:'按指定顺序强化' },
+  { id:'balanced', name:'均衡',     desc:'保持四件装备等级接近' },
+];
+
+// ── EXTENDED MILESTONES (stage 1000-5000) ─────────────
+const MILESTONES_EX2 = [
+  { stage:1500, atkMult:3,  spd:2.0,  desc:'ATK×3 · SPD+2.0' },
+  { stage:2000, atkMult:5,            desc:'ATK×5 · 二次转生' },
+  { stage:2500, atk:500000,crit:50,   desc:'ATK+500000 · Crit+50%' },
+  { stage:3000, atkMult:10,           desc:'ATK×10' },
+  { stage:4000, atkMult:20,spd:5.0,   desc:'ATK×20 · SPD+5.0' },
+  { stage:5000, atkMult:100,          desc:'ATK×100 · 神话降临' },
+];
+MILESTONES.push(...MILESTONES_EX2);
+
+// ── MORE ACHIEVEMENTS (80 total) ──────────────────────
+const ACHS_EX2 = [
+  { id:'rune1',    icon:'🔴', n:'初次刻文',   d:'装备第一个符文',          f:()=>(G.runesEquipped||[]).length>=1 },
+  { id:'rune6',    icon:'🌟', n:'六符文者',   d:'装备6个符文',             f:()=>(G.runesEquipped||[]).length>=6 },
+  { id:'title1',   icon:'👑', n:'有名有姓',   d:'获得第一个称号',          f:()=>(G.titlesEarned||[]).length>=1 },
+  { id:'title10',  icon:'📛', n:'称号收藏家', d:'获得10个称号',            f:()=>(G.titlesEarned||[]).length>=10 },
+  { id:'wboss1',   icon:'👹', n:'周常猎手',   d:'击败周常Boss',            f:()=>(G.weeklyBossKills||0)>=1 },
+  { id:'wboss5',   icon:'☠',  n:'周常大师',   d:'击败5次周常Boss',         f:()=>(G.weeklyBossKills||0)>=5 },
+  { id:'combo100', icon:'💯', n:'百连暴击',   d:'达到100连击暴击',         f:()=>G.bestCombo>=100 },
+  { id:'evolve1',  icon:'🌅', n:'装备进化',   d:'完成第一次装备进化',      f:()=>(G.gearEvolutions||0)>=1 },
+  { id:'evolve4',  icon:'🌌', n:'全装进化',   d:'所有装备进化一次',        f:()=>(G.gearEvolutions||0)>=4 },
+  { id:'s2000',    icon:'🔱', n:'混沌征服者', d:'到达Stage 2000',          f:()=>G.best>=2000 },
+  { id:'s5000',    icon:'🌠', n:'神话触碰',   d:'到达Stage 5000',          f:()=>G.best>=5000 },
+  { id:'dung30',   icon:'🏛', n:'副本常客',   d:'完成30次副本',            f:()=>(G.totalDungeons||0)>=30 },
+  { id:'chal10',   icon:'🏆', n:'挑战老手',   d:'完成10次挑战',            f:()=>(G.totalChallenges||0)>=10 },
+  { id:'auto10k',  icon:'🤖', n:'自动化大师', d:'自动强化10000次',         f:()=>(G.autoUpgradeCount||0)>=10000 },
+  { id:'pres10',   icon:'♾',  n:'永恒转生者', d:'完成10次转生',            f:()=>(G.prestigeCount||0)>=10 },
+  { id:'stage_mod',icon:'🎲', n:'变数大师',   d:'遇到50次关卡修正',        f:()=>(G.stageModCount||0)>=50 },
+];
+ACHS.push(...ACHS_EX2);
+
+
+// ═══════════════════════════════════════════════════════
+//  VERSION 4 EXPANSION
+// ═══════════════════════════════════════════════════════
+
+// ── EXPANDED PASSIVE TREE (6 tracks, 6 nodes each) ────
+const PASSIVES_EX = [
+  { id:'fortune2', icon:'💰', name:'财富之路', color:'#c9a84c', nodes:[
+    { id:'f1', n:'黄金嗅觉',   d:'金币+30%',                   c:1000,  e:()=>{ G.pb.goldMult+=0.30; } },
+    { id:'f2', n:'财富积累',   d:'金币+60%，每胜利+2金',        c:4000,  req:'f1', e:()=>{ G.pb.goldMult+=0.60; G.pb.goldFlat=2; } },
+    { id:'f3', n:'贪婪之心',   d:'Boss金币×3',                 c:15000, req:'f2', e:()=>{ G.pb.bossGoldMult=3; } },
+    { id:'f4', n:'点金术',     d:'Train花费-50%',               c:50000, req:'f3', e:()=>{ G.pb.trainCostMult=0.5; } },
+    { id:'f5', n:'无底金库',   d:'金币上限×10',                 c:150000,req:'f4', e:()=>{ G.pb.goldCapMult=10; } },
+    { id:'f6', n:'财神降临',   d:'每秒自动+金币（按Stage）',    c:500000,req:'f5', e:()=>{ G.pb.goldPerSec=true; } },
+  ]},
+  { id:'destruction', icon:'💥', name:'毁灭之路', color:'#f07040', nodes:[
+    { id:'d1', n:'破甲',       d:'攻击忽视10%敌人HP上限',       c:2000,  e:()=>{ G.pb.truePct=(G.pb.truePct||0)+0.01; } },
+    { id:'d2', n:'撕裂',       d:'普攻有15%双倍伤害',           c:8000,  req:'d1', e:()=>{ G.pb.splitChance=0.15; } },
+    { id:'d3', n:'毁灭冲击',   d:'ATK+100，暴击伤害+50%',       c:25000, req:'d2', e:()=>{ G.baseAtk+=100; G.critDmg+=50; } },
+    { id:'d4', n:'末日审判',   d:'每20次攻击自动触发3倍大击',   c:80000, req:'d3', e:()=>{ G.pb.judgement=20; } },
+    { id:'d5', n:'混沌爆破',   d:'暴击时额外造成10%最大HP真伤', c:250000,req:'d4', e:()=>{ G.pb.critTruePct=0.10; } },
+    { id:'d6', n:'神之一击',   d:'每100次攻击必定触发×50伤害',  c:800000,req:'d5', e:()=>{ G.pb.godStrike=100; } },
+  ]},
+  { id:'endurance', icon:'⏳', name:'耐久之路', color:'#7ec8f0', nodes:[
+    { id:'e1', n:'时间延伸',   d:'战斗时间+15秒',               c:800,   e:()=>{ G.pb.extraTime+=15; } },
+    { id:'e2', n:'无尽战意',   d:'战斗时间+30秒，失败不退关5%', c:3000,  req:'e1', e:()=>{ G.pb.extraTime+=30; G.pb.noRetro=(G.pb.noRetro||0)+0.05; } },
+    { id:'e3', n:'永恒战士',   d:'战斗时间+60秒',               c:12000, req:'e2', e:()=>{ G.pb.extraTime+=60; } },
+    { id:'e4', n:'不死意志',   d:'失败不退关概率+20%',          c:40000, req:'e3', e:()=>{ G.pb.noRetro=(G.pb.noRetro||0)+0.20; } },
+    { id:'e5', n:'时间主宰',   d:'战斗时间+120秒',              c:120000,req:'e4', e:()=>{ G.pb.extraTime+=120; } },
+    { id:'e6', n:'永生',       d:'失败时50%概率完全免除',        c:400000,req:'e5', e:()=>{ G.pb.noRetro=0.50; } },
+  ]},
+];
+PASSIVES.push(...PASSIVES_EX);
+
+// ── AWAKENING EXPANDED (5 total) ──────────────────────
+const AWAKENING_REQS_EX = [
+  { level:100, stage:200, gold:500000,   desc:'第四次觉醒 — 天神降临' },
+  { level:100, stage:500, gold:2000000,  desc:'第五次觉醒 — 混沌之源' },
+];
+AWAKENING_REQS.push(...AWAKENING_REQS_EX);
+
+const AWAKENING_BONUSES_EX = [
+  { atkMult:5.0,  spdBonus:3.0, critBonus:30, desc:'ATK×5 · SPD+3.0 · Crit+30%' },
+  { atkMult:10.0, spdBonus:5.0, critBonus:50, unlockMythic:true, desc:'ATK×10 · SPD+5.0 · Crit+50% · 解锁所有内容' },
+];
+AWAKENING_BONUSES.push(...AWAKENING_BONUSES_EX);
+
+// ── WEEKLY BOSS FIGHT CONFIG ───────────────────────────
+const WEEKLY_BOSS_STAGES = [
+  { minStage:10,  name:'骷髅王',    icon:'💀', hpMult:20,  reward:{ crystals:100, boss_core:10, gold:5000 } },
+  { minStage:50,  name:'混沌巨人',  icon:'🗿', hpMult:50,  reward:{ crystals:300, boss_core:30, mythic_shard:1, gold:20000 } },
+  { minStage:100, name:'虚空龙',    icon:'🐉', hpMult:100, reward:{ crystals:500, boss_core:50, mythic_shard:3, gold:50000 } },
+  { minStage:300, name:'末日天使',  icon:'👼', hpMult:300, reward:{ crystals:1000,boss_core:100,mythic_shard:10,gold:200000 } },
+  { minStage:500, name:'混沌之神',  icon:'🔱', hpMult:1000,reward:{ crystals:2000,boss_core:200,mythic_shard:30,gold:1000000 } },
+];
+
+// ── MATERIAL SINKS (things to spend mats on besides gear) ──
+const MAT_SINKS = [
+  { id:'atk_potion',  n:'ATK精华',  icon:'⚗', desc:'消耗20x攻击石 → 永久ATK+100',
+    cost:{ atk_stone:20 }, apply:()=>{ G.baseAtk+=100; log('⚗ ATK精华 ATK+100','ev'); } },
+  { id:'spd_potion',  n:'SPD精华',  icon:'💨', desc:'消耗20x速度石 → 永久SPD+0.1',
+    cost:{ spd_stone:20 }, apply:()=>{ G.atkSpd=Math.min(G.atkSpd+0.1,spdCap()); log('💨 SPD精华 SPD+0.1','ev'); } },
+  { id:'crit_potion', n:'暴击精华', icon:'🎯', desc:'消耗20x暴击石 → 永久Crit+3%',
+    cost:{ crit_stone:20 }, apply:()=>{ G.critChance+=3; log('🎯 暴击精华 Crit+3%','ev'); } },
+  { id:'cdmg_potion', n:'爆破精华', icon:'💥', desc:'消耗20x韧性石 → 永久CritDmg+20%',
+    cost:{ def_stone:20 }, apply:()=>{ G.critDmg+=20; log('💥 爆破精华 CritDmg+20%','ev'); } },
+  { id:'boss_atk',    n:'Boss之力', icon:'👊', desc:'消耗5x Boss核心 → ATK+500',
+    cost:{ boss_core:5 }, apply:()=>{ G.baseAtk+=500; log('👊 Boss之力 ATK+500','ev'); } },
+  { id:'boss_all',    n:'Boss觉悟', icon:'🌟', desc:'消耗20x Boss核心 → 全属性+5%',
+    cost:{ boss_core:20 }, apply:()=>{ G.bonusAtk+=Math.floor(totalAtk()*0.05); G.atkSpd=Math.min(G.atkSpd+0.05,spdCap()); G.critChance+=1; log('🌟 Boss觉悟 全属性+5%','ev'); } },
+  { id:'mythic_boost',n:'神话强化', icon:'🌠', desc:'消耗3x神话碎片 → ATK×1.1',
+    cost:{ mythic_shard:3 }, apply:()=>{ G.baseAtk=Math.floor(G.baseAtk*1.1); log('🌠 神话强化 ATK×1.1','ev'); } },
+  { id:'time_crystal',n:'时间水晶', icon:'⏳', desc:'消耗30x各材料 → 战斗时间+30s',
+    cost:{ atk_stone:30, spd_stone:30, crit_stone:30, def_stone:30 },
+    apply:()=>{ G.pb.extraTime=(G.pb.extraTime||0)+30; log('⏳ 时间水晶 时间+30s','ev'); } },
+];
+
+// ── BOSS PHASES (3-phase system) ──────────────────────
+const BOSS_PHASE_CONFIG = [
+  { at:0.75, name:'激怒', atkMult:1.5, regenPct:0.01, msg:'👑 Boss激怒！ATK×1.5，开始恢复HP' },
+  { at:0.50, name:'狂暴', atkMult:2.0, regenPct:0.02, shieldPct:0.1, msg:'👑 Boss狂暴！ATK×2，护盾激活' },
+  { at:0.25, name:'绝境', atkMult:3.0, regenPct:0.03, timeCut:0.5, msg:'👑 最终形态！ATK×3，时间减半' },
+];
+
+// ── STAGE SCALING (high stage balance) ────────────────
+function stageEnemyHP(stage) {
+  // Soft cap zones to prevent impossible stages
+  if(stage <= 100)  return Math.floor(50 * Math.pow(1.08, stage-1));
+  if(stage <= 500)  return Math.floor(50 * Math.pow(1.08, 100) * Math.pow(1.05, stage-100));
+  if(stage <= 1000) return Math.floor(50 * Math.pow(1.08, 100) * Math.pow(1.05, 400) * Math.pow(1.03, stage-500));
+  return Math.floor(50 * Math.pow(1.08, 100) * Math.pow(1.05, 400) * Math.pow(1.03, 500) * Math.pow(1.02, stage-1000));
+}
+
+// ── LEADERBOARD STUBS ────────────────────────────────
+const LEADERBOARD_CATEGORIES = [
+  { id:'best_stage',  name:'最高阶段',  icon:'⚔', getValue:()=>G.best },
+  { id:'total_dmg',   name:'总伤害',    icon:'💥', getValue:()=>G.totalDmg },
+  { id:'boss_kills',  name:'Boss击杀',  icon:'💀', getValue:()=>G.bossKills },
+  { id:'power',       name:'战力',      icon:'⭐', getValue:()=>typeof powerScore==='function'?powerScore():0 },
+];
+
+// Personal best records
+function updatePersonalBests() {
+  if(!G.personalBests) G.personalBests={};
+  LEADERBOARD_CATEGORIES.forEach(c=>{
+    const v=c.getValue();
+    if(v>(G.personalBests[c.id]||0)) G.personalBests[c.id]=v;
+  });
+}
+
+
+// ═══════════════════════════════════════════════════════
+//  TEAM SYSTEM (Phase D) — 2-3 units auto-battle
+// ═══════════════════════════════════════════════════════
+
+// ── UNIT ROLES ────────────────────────────────────────
+const UNIT_ROLES = [
+  {
+    id:'warrior',  name:'战士',   icon:'⚔',  color:'#d4522a',
+    desc:'高ATK，低SPD，每5击爆发攻击',
+    baseAtk:1.5, baseSpd:0.8, baseCrit:1.0, baseCdmg:1.0,
+    passive:'每5击造成300%伤害',
+    spec_bonus:{ atk:'Train ATK×2', crit:'CritDmg+50%', spd:'SPD上限+2' }
+  },
+  {
+    id:'assassin', name:'刺客',   icon:'🗡',  color:'#c9a84c',
+    desc:'高Crit，高SPD，连击叠加伤害',
+    baseAtk:0.9, baseSpd:1.3, baseCrit:2.0, baseCdmg:1.5,
+    passive:'每连击+5%伤害（无上限）',
+    spec_bonus:{ atk:'ATK+30%', crit:'CritDmg×2', spd:'每击SPD+0.01' }
+  },
+  {
+    id:'mage',     name:'法师',   icon:'🔮',  color:'#8b5cf6',
+    desc:'真伤，无视敌人HP比例伤害',
+    baseAtk:0.7, baseSpd:0.7, baseCrit:1.2, baseCdmg:2.0,
+    passive:'每击造成敌人最大HP 3%真伤',
+    spec_bonus:{ atk:'真伤+2%', crit:'真伤触发率+50%', spd:'SPD每1.0=真伤+0.5%' }
+  },
+  {
+    id:'tank',     name:'坦克',   icon:'🛡',  color:'#4a9fd4',
+    desc:'为队友提供ATK加成，自身耐久',
+    baseAtk:0.5, baseSpd:0.6, baseCrit:0.5, baseCdmg:1.0,
+    passive:'每次失败不退关，为队友ATK+10%',
+    spec_bonus:{ atk:'队友ATK+30%', crit:'队友Crit+15%', spd:'不退关概率+30%' }
+  },
+];
+
+// ── UNIT TEMPLATE ─────────────────────────────────────
+function makeUnit(roleId, name) {
+  const role = UNIT_ROLES.find(r=>r.id===roleId) || UNIT_ROLES[0];
+  return {
+    id: roleId+'_'+Date.now(),
+    roleId,
+    name: name || role.name,
+    level: 1,
+    unlocked: roleId==='warrior', // only warrior starts unlocked
+    // Base stats (multiplied by role multipliers)
+    baseAtk: Math.floor(10 * role.baseAtk),
+    atkSpd:  +(1.0 * role.baseSpd).toFixed(2),
+    critChance: 5 * role.baseCrit,
+    critDmg: 200 * role.baseCdmg,
+    // Gear — each unit has own 4 slots
+    gear: null, // initialized separately
+    // Skills
+    skills: [],
+    spec: null,
+    // Combat state
+    combo: 0,
+    hitCount: 0,
+  };
+}
+
+// ── TEAM SYNERGIES (Phase F) ───────────────────────────
+const TEAM_SYNERGIES = [
+  {
+    id:'double_warrior', name:'钢铁意志',   icon:'⚔⚔',
+    desc:'2×战士：全队ATK+40%',
+    req:(team)=>team.filter(u=>u.roleId==='warrior').length>=2,
+    apply:()=>{ G.teamAtkMult=(G.teamAtkMult||1)*1.40; }
+  },
+  {
+    id:'warrior_assassin', name:'斩杀协定', icon:'⚔🗡',
+    desc:'战士+刺客：暴击伤害+100%',
+    req:(team)=>team.some(u=>u.roleId==='warrior')&&team.some(u=>u.roleId==='assassin'),
+    apply:()=>{ G.teamCdmgBonus=(G.teamCdmgBonus||0)+100; }
+  },
+  {
+    id:'mage_support', name:'魔法护盾',    icon:'🔮🛡',
+    desc:'法师+坦克：真伤+3%，不退关+50%',
+    req:(team)=>team.some(u=>u.roleId==='mage')&&team.some(u=>u.roleId==='tank'),
+    apply:()=>{ G.teamTruePct=(G.teamTruePct||0)+0.03; G.pb.noRetro=(G.pb.noRetro||0)+0.50; }
+  },
+  {
+    id:'full_team', name:'无敌军团',       icon:'⚔🗡🔮🛡',
+    desc:'4种职业全齐：所有属性×2',
+    req:(team)=>['warrior','assassin','mage','tank'].every(r=>team.some(u=>u.roleId===r)),
+    apply:()=>{ G.teamAllMult=(G.teamAllMult||1)*2.0; }
+  },
+  {
+    id:'triple_dps', name:'三重打击',      icon:'⚔⚔⚔',
+    desc:'3个DPS角色：每击有20%额外一击',
+    req:(team)=>team.filter(u=>['warrior','assassin','mage'].includes(u.roleId)).length>=3,
+    apply:()=>{ G.teamDoubleHit=(G.teamDoubleHit||0)+0.20; }
+  },
+];
+
+// ── UNIT UNLOCK REQUIREMENTS ──────────────────────────
+const UNIT_UNLOCK_REQS = {
+  assassin: { stage:50,  gold:10000,  desc:'到达Stage 50 + 10000金' },
+  mage:     { stage:100, gold:50000,  desc:'到达Stage 100 + 50000金' },
+  tank:     { stage:200, gold:200000, desc:'到达Stage 200 + 200000金' },
+};
