@@ -582,7 +582,6 @@ function dropUpgradeMats(stage, isBoss, enemyType) {
   if(drops.length) log('📦 '+drops.join(' '),'loot');
 }
 
-────
 function recalcEq() {
   G.eqAtk=0; G.eqSpd=0; G.eqCrit=0; G.eqCritDmg=0;
   G._goldPctBonus=0;
