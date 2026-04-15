@@ -17,6 +17,7 @@ function newGame() {
     tAtk:0, tN:0, tCrit:0, tSpd:0, tCritPen:0,
     // Misc bonuses
     bonusAtk:0, skillBonusAtk:0,
+    setBonusAtk:0, setBonusCrit:0, setBonusSpd:0, setBonusAll:0, setEffects:[],
     // Talent
     talentId:'battle',
     rerollN:0, rerollCost:1000, rerollHist:[],
@@ -250,6 +251,12 @@ function loadGame() {
     // Recompute all gear stats on load
     for(const g of Object.values(G.gear)) recomputeGearStats(g);
     recalcEq();
+    // Init set bonuses to 0 if missing
+    if(!G.setEffects) G.setEffects=[];
+    if(G.setBonusAtk===undefined) G.setBonusAtk=0;
+    if(G.setBonusCrit===undefined) G.setBonusCrit=0;
+    if(G.setBonusSpd===undefined) G.setBonusSpd=0;
+    if(G.setBonusAll===undefined) G.setBonusAll=0;
     processOffline();
     return true;
   } catch(e) { return false; }
@@ -1284,20 +1291,29 @@ function toggleAuto(type) {
 
 // ── INIT ─────────────────────────────────────────────────────
 function initGame() {
-  const loaded=loadGame();
-  initGear();
-  initTasks();
-  updateStats(); updateSpecPill(); renderSpecCards();
-  refreshShop(true); renderPassive(); renderSkills(); renderTasks();
-  log('欢迎来到 CHRONICLE','sys');
-  if(loaded){
-    log('✅ 存档读取，继续冒险！','win');
-    const newSk=getUnlockableSkills();
-    if(newSk.length) log('📚 有'+newSk.length+'个技能可以学习！','skill');
-  } else {
-    log('天赋：'+T.icon+' '+T.name,'ev');
-    log('每10关Boss战 · 每5关精英怪 · 每15关小Boss','sys');
-    log('每10级可学一个技能 · 到数据页选择专精','sys');
+  try {
+    const loaded=loadGame();
+    initGear();
+    initTasks();
+    updateStats(); updateSpecPill(); renderSpecCards();
+    try{ refreshShop(true); }catch(e){ console.warn('shop',e); }
+    try{ renderPassive(); }catch(e){ console.warn('passive',e); }
+    try{ renderSkills(); }catch(e){ console.warn('skills',e); }
+    try{ renderTasks(); }catch(e){ console.warn('tasks',e); }
+    log('欢迎来到 CHRONICLE','sys');
+    if(loaded){
+      log('✅ 存档读取，继续冒险！','win');
+    } else {
+      log('天赋：'+T.icon+' '+T.name,'ev');
+      log('每10关Boss · 每5关精英怪 · 装备页选择强化路线','sys');
+    }
+    startFight(); runTimers(); checkAchs();
+  } catch(e) {
+    console.error('initGame crash:', e);
+    // Hard reset if corrupt save
+    if(e.message&&(e.message.includes('undefined')||e.message.includes('null'))){
+      localStorage.removeItem('chronicle_v2');
+      location.reload();
+    }
   }
-  startFight(); runTimers(); checkAchs();
 }
