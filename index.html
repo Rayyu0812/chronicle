@@ -8,6 +8,83 @@
 <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
+<!-- ══ LOGIN SCREEN ══ -->
+<div id="login-screen" style="position:fixed;inset:0;background:#080810;display:flex;align-items:center;justify-content:center;z-index:1000;padding:24px;">
+  <div style="width:100%;max-width:360px;">
+    <!-- Title -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:2.5rem;font-weight:700;color:#c9a84c;letter-spacing:.3em;text-shadow:0 0 30px rgba(201,168,76,.4)">CHRONICLE</div>
+      <div style="font-size:.6rem;color:#55556a;letter-spacing:.2em;margin-top:4px">IDLE RPG</div>
+    </div>
+
+    <!-- Login form -->
+    <div id="login-form">
+      <div style="margin-bottom:12px;">
+        <div style="font-size:.56rem;color:#8888aa;letter-spacing:.1em;margin-bottom:5px">USERNAME</div>
+        <input id="login-user" type="text" placeholder="输入账号"
+          style="width:100%;background:#0e0e1a;border:1px solid #2a2a45;border-radius:8px;padding:12px 14px;color:#d4d4e8;font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()">
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-size:.56rem;color:#8888aa;letter-spacing:.1em;margin-bottom:5px">PASSWORD</div>
+        <input id="login-pass" type="password" placeholder="输入密码"
+          style="width:100%;background:#0e0e1a;border:1px solid #2a2a45;border-radius:8px;padding:12px 14px;color:#d4d4e8;font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter') doLogin()">
+      </div>
+      <div id="login-error" style="font-size:.6rem;color:#f07040;text-align:center;margin-bottom:10px;min-height:16px;"></div>
+      <button onclick="doLogin()"
+        style="width:100%;padding:13px;background:rgba(201,168,76,.12);border:1px solid #c9a84c;border-radius:8px;color:#e8c97a;font-family:'JetBrains Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.1em;margin-bottom:10px;transition:background .15s;"
+        onmouseenter="this.style.background='rgba(201,168,76,.22)'"
+        onmouseleave="this.style.background='rgba(201,168,76,.12)'">
+        LOGIN
+      </button>
+      <button onclick="showRegister()"
+        style="width:100%;padding:11px;background:transparent;border:1px solid #2a2a45;border-radius:8px;color:#8888aa;font-family:'JetBrains Mono',monospace;font-size:.72rem;cursor:pointer;letter-spacing:.1em;transition:border-color .15s;"
+        onmouseenter="this.style.borderColor='#8888aa'"
+        onmouseleave="this.style.borderColor='#2a2a45'">
+        注册账号
+      </button>
+    </div>
+
+    <!-- Register form -->
+    <div id="register-form" style="display:none;">
+      <div style="margin-bottom:12px;">
+        <div style="font-size:.56rem;color:#8888aa;letter-spacing:.1em;margin-bottom:5px">USERNAME</div>
+        <input id="reg-user" type="text" placeholder="设定账号（4-16字符）"
+          style="width:100%;background:#0e0e1a;border:1px solid #2a2a45;border-radius:8px;padding:12px 14px;color:#d4d4e8;font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="font-size:.56rem;color:#8888aa;letter-spacing:.1em;margin-bottom:5px">PASSWORD</div>
+        <input id="reg-pass" type="password" placeholder="设定密码（6位以上）"
+          style="width:100%;background:#0e0e1a;border:1px solid #2a2a45;border-radius:8px;padding:12px 14px;color:#d4d4e8;font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none;box-sizing:border-box;">
+      </div>
+      <div style="margin-bottom:20px;">
+        <div style="font-size:.56rem;color:#8888aa;letter-spacing:.1em;margin-bottom:5px">CONFIRM</div>
+        <input id="reg-pass2" type="password" placeholder="确认密码"
+          style="width:100%;background:#0e0e1a;border:1px solid #2a2a45;border-radius:8px;padding:12px 14px;color:#d4d4e8;font-family:'JetBrains Mono',monospace;font-size:.78rem;outline:none;box-sizing:border-box;"
+          onkeydown="if(event.key==='Enter') doRegister()">
+      </div>
+      <div id="reg-error" style="font-size:.6rem;color:#f07040;text-align:center;margin-bottom:10px;min-height:16px;"></div>
+      <button onclick="doRegister()"
+        style="width:100%;padding:13px;background:rgba(74,159,212,.12);border:1px solid #4a9fd4;border-radius:8px;color:#7ec8f0;font-family:'JetBrains Mono',monospace;font-size:.78rem;cursor:pointer;letter-spacing:.1em;margin-bottom:10px;transition:background .15s;"
+        onmouseenter="this.style.background='rgba(74,159,212,.22)'"
+        onmouseleave="this.style.background='rgba(74,159,212,.12)'">
+        CREATE ACCOUNT
+      </button>
+      <button onclick="showLogin()"
+        style="width:100%;padding:11px;background:transparent;border:1px solid #2a2a45;border-radius:8px;color:#8888aa;font-family:'JetBrains Mono',monospace;font-size:.72rem;cursor:pointer;letter-spacing:.1em;"
+        onmouseenter="this.style.borderColor='#8888aa'"
+        onmouseleave="this.style.borderColor='#2a2a45'">
+        返回登录
+      </button>
+    </div>
+
+    <div style="text-align:center;margin-top:20px;font-size:.5rem;color:#2a2a45;">
+      存档保存在本设备 · 不同设备需重新注册
+    </div>
+  </div>
+</div>
+
 <div id="root">
 
   <!-- HEADER -->
@@ -20,6 +97,7 @@
       <div id="save-dot"></div>
       <div id="save-time">未保存</div>
       <button class="hbtn" onclick="manualSave()">保存</button>
+      <button class="hbtn" onclick="doLogout()" style="border-color:rgba(212,82,42,.4);color:#f07040;margin-left:2px">登出</button>
     </div>
   </div>
 
@@ -1412,6 +1490,122 @@ function updateZoneBadge() {
 
 // ── START ────────────────────────────────────────────────────
 
+
+
+// ── LOGIN SYSTEM ─────────────────────────────────────
+const AUTH_KEY = 'chronicle_auth';
+
+function getAccounts() {
+  try{ return JSON.parse(localStorage.getItem(AUTH_KEY)||'{}'); }
+  catch(e){ return {}; }
+}
+
+function saveAccounts(accounts) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(accounts));
+}
+
+function getSaveKey(username) {
+  return 'chronicle_v2_' + username.toLowerCase();
+}
+
+function showLogin() {
+  document.getElementById('login-form').style.display='block';
+  document.getElementById('register-form').style.display='none';
+  document.getElementById('login-error').textContent='';
+}
+
+function showRegister() {
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('register-form').style.display='block';
+  document.getElementById('reg-error').textContent='';
+}
+
+function simpleHash(str) {
+  // Simple hash for password storage (client-side only)
+  let hash = 0;
+  for(let i=0;i<str.length;i++){
+    const c=str.charCodeAt(i);
+    hash=((hash<<5)-hash)+c; hash|=0;
+  }
+  return hash.toString(36);
+}
+
+function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+
+  if(!user||!pass){ errEl.textContent='请输入账号和密码'; return; }
+
+  const accounts = getAccounts();
+  const account = accounts[user.toLowerCase()];
+
+  if(!account){ errEl.textContent='账号不存在，请先注册'; return; }
+  if(account.hash !== simpleHash(pass)){ errEl.textContent='密码错误'; return; }
+
+  // Login success
+  window._currentUser = user.toLowerCase();
+  window._saveKey = getSaveKey(user);
+  enterGame(user);
+}
+
+function doRegister() {
+  const user = document.getElementById('reg-user').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+  const errEl = document.getElementById('reg-error');
+
+  if(!user||user.length<4||user.length>16){ errEl.textContent='账号需4-16个字符'; return; }
+  if(!/^[a-zA-Z0-9_]+$/.test(user)){ errEl.textContent='账号只能包含字母数字下划线'; return; }
+  if(!pass||pass.length<6){ errEl.textContent='密码至少6位'; return; }
+  if(pass!==pass2){ errEl.textContent='两次密码不一致'; return; }
+
+  const accounts = getAccounts();
+  if(accounts[user.toLowerCase()]){ errEl.textContent='账号已存在'; return; }
+
+  // Register
+  accounts[user.toLowerCase()] = { username:user, hash:simpleHash(pass), created:Date.now() };
+  saveAccounts(accounts);
+
+  window._currentUser = user.toLowerCase();
+  window._saveKey = getSaveKey(user);
+  enterGame(user);
+}
+
+function enterGame(username) {
+  // Hide login screen
+  const ls = document.getElementById('login-screen');
+  ls.style.opacity='0';
+  ls.style.transition='opacity .4s';
+  setTimeout(()=>{ ls.style.display='none'; }, 400);
+
+  // Update save key to be user-specific
+  // Override the SK constant used in saveGame/loadGame
+  window._overrideSaveKey = window._saveKey;
+
+  // Show username in header
+  const saveTime = document.getElementById('save-time');
+  if(saveTime) saveTime.textContent = username;
+
+  if(!G.startTime) G.startTime=Date.now();
+  initGame();
+}
+
+function doLogout() {
+  saveGame();
+  window._currentUser = null;
+  window._overrideSaveKey = null;
+  // Reset game state
+  G = newGame();
+  T = TALENTS[0];
+  // Show login
+  const ls = document.getElementById('login-screen');
+  ls.style.display='flex'; ls.style.opacity='1';
+  document.getElementById('login-user').value='';
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-error').textContent='';
+  showLogin();
+}
 
 window.addEventListener('load', ()=>{
   if(!G.startTime) G.startTime=Date.now();

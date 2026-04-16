@@ -35,6 +35,7 @@ function newGame() {
     totalDmg:0, totalDmgFight:0,
     // Live
     combo:0, bestCombo:0, streak:0, bestStreak:0,
+    _fighting:false, // true while a fight is active, prevents double onWin/onLose
     dpsAccum:0, dpsTimer:0, currentDPS:0, lastDmg:0,
     isBoss:false, timeLimit:60, enemyHP:0, enemyMax:0, timeEl:0,
     enemyType:'normal', enemyShield:0, enemyPhased:false,
@@ -167,9 +168,9 @@ function totalCritDmg() {
 }
 
 function calcTimeLimit() {
-  let t = 60 + (G.pb.extraTime||0);
+  let t = 60 + ((G.pb&&G.pb.extraTime)||0);
   // Affix time bonus
-  for(const it of Object.values(G.equipped)){
+  for(const it of Object.values(G.equipped||{})){
     if(!it) continue;
     for(const aid of (it.affixes||[])){
       const a=getAffix(aid); if(a&&a.time) t+=a.time;
@@ -276,7 +277,8 @@ function spawnParts(type) {
 }
 
 // ── SAVE / LOAD ───────────────────────────────────────────────
-const SK = 'chronicle_v2';
+const SK = 'chronicle_v2'; // default, overridden per user
+function getSK() { return window._overrideSaveKey || SK; }
 function saveGame() {
   try {
     G.lastSeen = Date.now();
@@ -288,7 +290,7 @@ function saveGame() {
 }
 function loadGame() {
   try {
-    const raw=localStorage.getItem(SK); if(!raw) return false;
+    const raw=localStorage.getItem(getSK()); if(!raw) return false;
     const d=JSON.parse(raw);
     if(d.pb) Object.assign(G.pb, d.pb);
     Object.assign(G, d);
@@ -326,6 +328,17 @@ function loadGame() {
     if(!G.upgradeCount) G.upgradeCount=0;
     if(!G.dungeonsDone) G.dungeonsDone={};
     if(!G.challengesBest) G.challengesBest={};
+    G._fighting = false;
+    // Critical: ensure G.pb always exists with all required fields
+    if(!G.pb) G.pb={};
+    const pbDefaults={ trainAtkMult:0, trainFlat:0, demolish:0, spdCap:0, doubleHit:0,
+      extraTime:0, goldMult:0, goldFlat:0, dropRate:0, legMult:1, godBless:0, mythicChance:0,
+      extraAffix:0, gemBonus:1, setReduce:0, bossGoldMult:1, trainCostMult:1,
+      goldCapMult:1, goldPerSec:false, noRetro:0, truePct:0, splitChance:0,
+      judgement:0, godStrike:0, critTruePct:0, affixMult:1, allMult:1 };
+    for(const [k,v] of Object.entries(pbDefaults)){ if(G.pb[k]===undefined) G.pb[k]=v; }
+    // Ensure _timerGen exists
+    if(!G._timerGen) G._timerGen=0;
     if(!G.runesEquipped) G.runesEquipped=[];
     if(!G.runeInventory) G.runeInventory=[];
     if(!G.titlesEarned) G.titlesEarned=[];
@@ -1463,6 +1476,7 @@ function unitCritDmg(unit) {
 }
 
 function calcDmg() {
+  try {
   // Get current attacking unit
   const activeUnits = G.units ? G.units.filter(u=>u.unlocked) : [];
   const unit = activeUnits.length > 1 ? activeUnits[(G.activeUnit-1+activeUnits.length)%activeUnits.length] : null;
@@ -1568,7 +1582,11 @@ function calcDmg() {
   // Skill: berserk_rush
   if(G._berserkActive) dmg=Math.floor(dmg*2);
   G.lastDmg=dmg;
-  return { dmg, isCrit, special:tMult>1 };
+  return { dmg:Math.max(1,dmg), isCrit, special:tMult>1 };
+  } catch(e) {
+    console.error('calcDmg crash:', e);
+    return { dmg:Math.max(1,Math.floor(totalAtk())), isCrit:false, special:false };
+  }
 }
 
 function stopTimers() {
@@ -1583,11 +1601,12 @@ function stopTimers() {
 }
 
 function startFight() {
+  G._fighting = true;
   G.fights++;
   const eType=getEnemyType(G.stage);
   G.enemyType=eType.id;
   G.isBoss=eType.id==='boss';
-  G.timeLimit=calcTimeLimit()+(G.isBoss?30:eType.id==='miniboss'?15:0);
+  G.timeLimit=Math.max(30, calcTimeLimit()+(G.isBoss?30:eType.id==='miniboss'?15:0));
   const baseHP=Math.floor(50*Math.pow(1.08,G.stage-1));
   const zone=typeof getZone==='function'?getZone(G.stage):{enemyMult:1};
   const scaledHP=typeof stageEnemyHP==='function'?stageEnemyHP(G.stage):baseHP;
@@ -1640,7 +1659,11 @@ function startFight() {
   }
 }
 
-function restartCombat() { stopTimers(); startFight(); runTimers(); }
+function restartCombat() {
+  stopTimers();
+  startFight();
+  runTimers();
+}
 
 function runTimers() {
   // Guard: stop any existing timers first
@@ -1652,6 +1675,7 @@ function runTimers() {
   const unitCount = Math.max(1, activeUnits.length);
   const atkMs=(1000/totalSpd())/G.speed;
   atkI=setInterval(()=>{
+    try{
     if(G._timerGen!==_gen){ clearInterval(atkI); atkI=null; return; }
     if(G.enemyHP<=0) return;
     // Cycle through units
@@ -1787,11 +1811,13 @@ function runTimers() {
 
     if(G.enemyHP<=0) onWin();
     updateStats();
+    }catch(e){ console.error('atkI error:',e); }
   }, atkMs);
 
   // Timer
   const tms=1000/G.speed;
   tmrI=setInterval(()=>{
+    try{
     if(G._timerGen!==_gen){ clearInterval(tmrI); tmrI=null; return; }
     G.timeEl++; updateCombatUI();
     // Time erode talent
@@ -1805,6 +1831,7 @@ function runTimers() {
     const half=Math.floor(G.timeLimit/2);
     if(G.timeEl===half){ $('combat-badge').textContent='危险！'; $('combat-badge').className='danger'; }
     if(G.timeEl>=G.timeLimit&&G.enemyHP>0) onLose();
+    }catch(e){ console.error('tmrI error:',e); }
   }, tms);
 
   // DPS
@@ -1832,6 +1859,7 @@ function runTimers() {
   // Unit sync skill - all units attack together every 30 sec
   if(hasSkill('unit_sync')){
     setInterval(()=>{
+      if(G._timerGen!==_gen) return;
       if(G.enemyHP<=0) return;
       const units=(G.units||[]).filter(u=>u.unlocked);
       if(units.length<2) return;
@@ -1908,6 +1936,8 @@ function updateCombatUI() {
 }
 
 function onWin() {
+  if(!G._fighting) return; // already handled
+  G._fighting = false;
   stopTimers();
   G._spdStack=0;
   G._critChain=0;
@@ -2033,6 +2063,8 @@ function onWin() {
 }
 
 function onLose() {
+  if(!G._fighting) return; // already handled
+  G._fighting = false;
   stopTimers(); G.combo=0;
   // No-retreat passives (eternal_will skill + endurance passive)
   const noRetroChance=(hasSkill('eternal_will')?SKILLS.find(s=>s.id==='eternal_will').noRetrocChance:0)+(G.pb.noRetro||0);
