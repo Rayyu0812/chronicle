@@ -310,9 +310,18 @@ function loadGame() {
       // Ensure units have required fields
       G.units.forEach(u=>{
         if(!u.gear) try{ u.gear=makeInitialGear(); }catch(_){}
-        if(!u.combo) u.combo=0;
-        if(!u.hitCount) u.hitCount=0;
-        if(u.unlocked===undefined) u.unlocked=(u.roleId==='warrior');
+        if(!u.hitCount)  u.hitCount=0;
+        if(!u.spdStack)  u.spdStack=0;
+        if(!u.critChain) u.critChain=0;
+        if(u.unlocked===undefined) u.unlocked=(u.roleId==='atk'||u.roleId==='warrior'||u.isMainChar);
+        // Set role field from roleId
+        if(!u.role&&typeof resolveRole==='function'){
+          const r=resolveRole(u.roleId); if(r) u.role=r.role||r.id;
+        }
+        // Set icon from role
+        if(!u.icon&&typeof resolveRole==='function'){
+          const r=resolveRole(u.roleId); if(r) u.icon=r.icon;
+        }
       });
     } catch(e) { console.warn('unit load error:',e); }
     if(G.activeUnit===undefined) G.activeUnit=0;
@@ -1712,10 +1721,9 @@ function startFight() {
       log('━━ '+zone.icon+zone.name+' Stage '+G.stage+' HP:'+fmt(G.enemyMax)+' ━━','sys');
       // Show team composition
       const team=(G.units||[]).filter(u=>u.unlocked);
-      if(team.length>1){
-        const roles=typeof UNIT_ROLES!=='undefined'?UNIT_ROLES:[];
-        const teamStr=team.map(u=>{ const r=roles.find(x=>x.id===u.roleId); return r?r.icon+u.name:u.name; }).join(' · ');
-        log('👥 '+teamStr,'sys');
+      if(team.length>=1){
+        const teamStr=team.map(u=>(u.icon||'⚔')+' '+u.name).join(' · ');
+        log('👥 出战：'+teamStr,'sys');
       }
     }
   }
@@ -1859,12 +1867,13 @@ function runTimers() {
     }
 
     spawnDmg(totalHit, isCrit, special||skillLabel!=='');
-    if(skillLabel&&G.speed<=3) log(skillLabel+' -'+fmt(totalHit),'skill');
-    else if(G.speed<=2){
-      if(special) log('🌩 -'+fmt(totalHit),'ev');
-      else if(isCrit) log('💥 暴击！-'+fmt(totalHit),'atk');
-      else log('⚔ -'+fmt(totalHit),'atk');
-    } else if(isCrit) log('💥 暴击！-'+fmt(totalHit),'atk');
+    if(G.speed<=3){
+      const mu=G.units&&G.units[0];
+      const mpfx=(mu?mu.icon+'['+mu.name+']':'⚔[战士]')+' ';
+      if(skillLabel)           log(mpfx+skillLabel+' '+fmt(totalHit),'skill');
+      else if(isCrit)          log(mpfx+'暴击 💥 '+fmt(totalHit),'atk');
+      else if(G.speed<=2)      log(mpfx+fmt(totalHit),'atk');
+    }
 
     if(G.enemyHP<=0) onWin();
     updateStats();
