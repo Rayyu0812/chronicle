@@ -111,18 +111,10 @@ function totalAtk() {
   if(setCount('storm')>=4) a = Math.floor(a*(1+Math.floor(totalSpd())*0.10));
   // Awakening multipliers
   for(const b of (G.awakeningBonuses||[])) a = Math.floor(a*b.atkMult);
-  // Skill: blood_rage stacks
-  if(hasSkill('blood_rage')){ const sk=SKILLS.find(s=>s.id==='blood_rage'); a=Math.floor(a*(1+(sk.atkBonus?sk.atkBonus():0))); }
-  // Skill: bloodlust
-  if(hasSkill('bloodlust')){ const sk=SKILLS.find(s=>s.id==='bloodlust'); a=Math.floor(a*(1+(sk.atkBonus?sk.atkBonus():0))); }
-  // Skill: limit_break
-  if(hasSkill('limit_break')){ const sk=SKILLS.find(s=>s.id==='limit_break'); a=Math.floor(a*(1+(sk.atkBonus?sk.atkBonus():0))); }
-  // Skill: battle_will
-  if(hasSkill('battle_will')){ const sk=SKILLS.find(s=>s.id==='battle_will'); a=Math.floor(a*(1+(sk.atkBonus?sk.atkBonus():0))); }
-  // Skill: revenge
-  if(hasSkill('revenge')){ const sk=SKILLS.find(s=>s.id==='revenge'); a=Math.floor(a*(1+(sk.atkBonus?sk.atkBonus():0))); }
-  // Skill: tyrant
-  if(hasSkill('tyrant')){ const sk=SKILLS.find(s=>s.id==='tyrant'); a=Math.floor(a*(1+(sk.atkBonus?sk.atkBonus():0))); }
+  // All skill ATK bonuses (auto-collect from SKILLS array)
+  SKILLS.filter(s=>G.skills.includes(s.id)&&s.atkBonus).forEach(sk=>{
+    try{ const b=sk.atkBonus(); if(b>0) a=Math.floor(a*(1+b)); }catch(e){}
+  });
   // Skill: frenzy extra dmg bonus handled in calcDmg
   // Overload talent
   if(T.id==='overload') {} // SPD bonus handled in totalSpd
@@ -243,14 +235,12 @@ function shake() {
   setTimeout(()=>r.classList.remove('shake'),300);
 }
 
-function flash(id) { const e=$(id); e.classList.remove('show'); void e.offsetWidth; e.classList.add('show'); }
-function flashLegendary(name) { $('fl-leg').innerHTML='⭐ 传说装备 ⭐<br><span style="font-size:.85rem">'+name+'</span>'; flash('flash-legend'); }
-function flashMythic(name)    { $('fl-myth').innerHTML='🌠 神话装备 🌠<br><span style="font-size:.85rem">'+name+'</span>'; flash('flash-myth'); }
-function flashEpic(name)      { $('fl-epic').innerHTML='💜 史诗装备<br><span style="font-size:.75rem">'+name+'</span>'; flash('flash-epic'); }
-function flashLvl()           { flash('flash-lvl'); }
-function flashMS(txt)         { $('fl-ms').textContent=txt; flash('flash-ms'); }
-function flashCombo(n)        { $('fl-combo').textContent=n+'连击!!'; flash('flash-combo'); }
-function flashAwaken()        { flash('flash-awaken'); }
+
+
+
+
+
+
 
 function spawnDmg(dmg, isCrit, isSpecial) {
   if(G.speed>5) return;
@@ -267,11 +257,6 @@ function spawnDmg(dmg, isCrit, isSpecial) {
   d.style.left=Math.floor(15+Math.random()*65)+'%';
   d.style.top=Math.floor(25+Math.random()*30)+'%';
   l.appendChild(d); setTimeout(()=>d.remove(),900);
-  // Crit screen flash
-  if(isCrit && G.speed<=3){
-    const cf=$('crit-flash');
-    if(cf){ cf.classList.remove('show'); void cf.offsetWidth; cf.classList.add('show'); }
-  }
   // Screen shake on huge crits
   if(isCrit && dmg>totalAtk()*3) shake();
 }
@@ -314,10 +299,19 @@ function loadGame() {
     if(!G.gachaPity) G.gachaPity=0;
     if(!G.units) G.units=[{ id:'warrior', name:'战士', icon:'⚔', unlocked:true, baseAtk:0, atkSpd:0, critChance:0, critDmg:0, spec:null, gear:null, skills:[] }];
     if(G.unit2Unlocked===undefined) G.unit2Unlocked=false;
-    if(!G.units||!Array.isArray(G.units)||!G.units.length){
-      const warrior=makeUnit('warrior','战士'); warrior.gear=makeInitialGear(); warrior.unlocked=true;
-      G.units=[warrior];
-    }
+    try {
+      if(!G.units||!Array.isArray(G.units)||!G.units.length){
+        const warrior=makeUnit('warrior','战士'); warrior.gear=makeInitialGear(); warrior.unlocked=true;
+        G.units=[warrior];
+      }
+      // Ensure units have required fields
+      G.units.forEach(u=>{
+        if(!u.gear) try{ u.gear=makeInitialGear(); }catch(_){}
+        if(!u.combo) u.combo=0;
+        if(!u.hitCount) u.hitCount=0;
+        if(u.unlocked===undefined) u.unlocked=(u.roleId==='warrior');
+      });
+    } catch(e) { console.warn('unit load error:',e); }
     if(G.activeUnit===undefined) G.activeUnit=0;
     if(!G.teamAtkMult) G.teamAtkMult=1;
     if(!G.teamAllMult) G.teamAllMult=1;
@@ -363,30 +357,45 @@ function loadGame() {
 }
 function manualSave() { saveGame(); log('💾 已保存','sys'); }
 setInterval(saveGame, 30000);
+
+function checkRuneSets() {
+  if(typeof RUNE_SETS==='undefined'||!G.runesEquipped) return;
+  RUNE_SETS.forEach(set=>{
+    const hasAll=set.runes.every(r=>G.runesEquipped.includes(r));
+    if(hasAll&&!G.runeSetsDone?.includes(set.id)){
+      if(!G.runeSetsDone) G.runeSetsDone=[];
+      G.runeSetsDone.push(set.id);
+      set.bonus.apply();
+      log('✨ 符文套装激活：'+set.icon+' '+set.name+' — '+set.bonus.desc,'boss');
+      notif('✨ '+set.name+' 激活！','#c9a84c');
+    }
+  });
+}
 setInterval(runAutoUpgrade, 1000);
 
 function runAutoUpgrade() {
-  if(!G.gear||G.autoUpgradeMode==='off') return;
-  const slots = G.autoUpgradeMode==='slot'?[G.autoUpgradeSlot]:SLOTS;
-  for(const slot of slots){
-    const g=G.gear[slot]; if(!g||!g.pathId) continue;
-    const paths=GEAR_PATHS[slot];
-    const path=paths&&paths.find(p=>p.id===g.pathId); if(!path) continue;
-    const lv=g.pathLv||0;
-    if(lv>=path.levels.length) continue;
-    const cost=path.levels[lv].cost;
-    const have=G.upgMats[path.mat]||0;
-    // Balanced mode: only upgrade if this slot is lowest
-    if(G.autoUpgradeMode==='balanced'){
-      const minLv=Math.min(...SLOTS.map(s=>G.gear[s]?G.gear[s].pathLv||0:0));
-      if((g.pathLv||0)>minLv+2) continue;
+  try {
+    if(!G.gear||G.autoUpgradeMode==='off') return;
+    const slots = G.autoUpgradeMode==='slot'?[G.autoUpgradeSlot]:SLOTS;
+    for(const slot of slots){
+      const g=G.gear[slot]; if(!g||!g.pathId) continue;
+      const paths=GEAR_PATHS[slot];
+      const path=paths&&paths.find(p=>p.id===g.pathId); if(!path) continue;
+      const lv=g.pathLv||0;
+      if(lv>=path.levels.length) continue;
+      const cost=path.levels[lv].cost;
+      const have=G.upgMats[path.mat]||0;
+      if(G.autoUpgradeMode==='balanced'){
+        const minLv=Math.min(...SLOTS.map(s=>G.gear[s]?G.gear[s].pathLv||0:0));
+        if((g.pathLv||0)>minLv+2) continue;
+      }
+      if(have>=cost){
+        upgradeGear(slot,'path');
+        G.autoUpgradeCount=(G.autoUpgradeCount||0)+1;
+        break;
+      }
     }
-    if(have>=cost){
-      upgradeGear(slot,'path');
-      G.autoUpgradeCount=(G.autoUpgradeCount||0)+1;
-      break; // one upgrade per tick
-    }
-  }
+  } catch(e) {}
 }
 
 // ── OFFLINE GAINS ─────────────────────────────────────────────
@@ -818,10 +827,9 @@ function openBox(forced) {
     G.inventory.push(it); G.itemsGot++; capInventory();
     log('📦 ['+RNAME[it.rar]+'] '+it.name,'loot');
     if(it.affixes.length) it.affixes.forEach(id=>{const a=getAffix(id);if(a)log('  ✦ '+a.name,'loot');});
-    if(it.rar==='mythic'){G.mythCount++;flashMythic(it.name);spawnParts('mythic');}
-    else if(it.rar==='legendary'){G.legCount++;flashLegendary(it.name);spawnParts('legendary');}
-    else if(it.rar==='epic') flashEpic(it.name);
-    updateTaskProgress('itemsGot',1);
+    if(it.rar==='mythic'){G.mythCount++;spawnParts('mythic');}
+    else if(it.rar==='legendary'){G.legCount++;spawnParts('legendary');}
+    else if(it.rar==='epic') updateTaskProgress('itemsGot',1);
   }
   recalcSets(); renderEquip(); checkAchs();
 }
@@ -829,14 +837,18 @@ function openBox(forced) {
 // ── EQUIPMENT ────────────────────────────────────────────
 // ── NEW GEAR UPGRADE SYSTEM ───────────────────────────────────
 function initGear() {
-  if(!G.gear) G.gear = makeInitialGear();
-  // Init team
-  if(!G.units||!G.units.length){
-    const warrior = makeUnit('warrior','战士');
-    warrior.gear = makeInitialGear();
-    G.units = [warrior];
-  }
-  calcTeamSynergies();
+  try {
+    if(!G.gear) G.gear = makeInitialGear();
+    // Init team
+    if(!G.units||!G.units.length){
+      const warrior = makeUnit('warrior','战士');
+      warrior.gear = makeInitialGear();
+      G.units = [warrior];
+    }
+    // Ensure each unit has gear
+    G.units.forEach(u=>{ if(!u.gear) u.gear=makeInitialGear(); });
+    calcTeamSynergies();
+  } catch(e) { console.warn('initGear error:',e); }
 }
 
 function choosePath(slot, pathId) {
@@ -967,12 +979,20 @@ function recalcEq() {
   G.eqAtk=0; G.eqSpd=0; G.eqCrit=0; G.eqCritDmg=0;
   G._goldPctBonus=0;
   if(!G.gear) return;
-  // Sum up all gear stats
+  // Main character gear
   for(const g of Object.values(G.gear)) {
     G.eqAtk   += g.totalAtk  || 0;
     G.eqSpd   += g.totalSpd  || 0;
     G.eqCrit  += g.totalCrit || 0;
     G.eqCritDmg += g.totalCdmg || 0;
+  }
+  // Unit gear contributes via unitAtk() per unit — not added to main pool
+  // But tank passive: each gear level = +team ATK boost
+  if(G.units){
+    G.units.filter(u=>u.unlocked&&u.roleId==='tank'&&u.gear).forEach(u=>{
+      const tankLvTotal = Object.values(u.gear).reduce((s,g)=>(s+(g.pathLv||0)),0);
+      G.teamAtkMult = Math.max(1, (G.teamAtkMult||1) + tankLvTotal*0.001);
+    });
   }
 }
 
@@ -1033,13 +1053,15 @@ function recomputeGearStats(g) {
 }
 
 function calcTeamSynergies() {
-  if(!G.units||!G.units.length) return;
-  G.teamAtkMult=1; G.teamCdmgBonus=0; G.teamTruePct=0; G.teamAllMult=1; G.teamDoubleHit=0;
-  const active=G.units.filter(u=>u.unlocked);
-  if(typeof TEAM_SYNERGIES==='undefined') return;
-  TEAM_SYNERGIES.forEach(syn=>{
-    if(syn.req(active)) syn.apply();
-  });
+  try {
+    if(!G.units||!G.units.length) return;
+    G.teamAtkMult=1; G.teamCdmgBonus=0; G.teamTruePct=0; G.teamAllMult=1; G.teamDoubleHit=0;
+    const active=G.units.filter(u=>u.unlocked);
+    if(typeof TEAM_SYNERGIES==='undefined') return;
+    TEAM_SYNERGIES.forEach(syn=>{
+      try{ if(syn.req(active)) syn.apply(); }catch(e){}
+    });
+  } catch(e) { console.warn('synergy error:',e); }
 }
 
 function recalcSets() {
@@ -1111,9 +1133,8 @@ function craftItem(mat) {
   const it=genItem(G.stage,tar); it.stage=G.stage;
   G.inventory.push(it);
   log('🔮 合成 ['+RNAME[tar]+'] '+it.name,'ev');
-  if(tar==='legendary'){G.legCount++;flashLegendary(it.name);spawnParts('legendary');}
-  else if(tar==='epic') flashEpic(it.name);
-  checkAchs(); renderEquip(); updateStats();
+  if(tar==='legendary'){G.legCount++;spawnParts('legendary');}
+  else if(tar==='epic') checkAchs(); renderEquip(); updateStats();
 }
 
 function capInventory() {
@@ -1189,7 +1210,6 @@ function doAwaken() {
   G.level=1; G.exp=0; G.expNeed=EXP_TABLE[1];
   G.stage=1; G.baseAtk=Math.floor(G.baseAtk*0.3+10); // keep 30% of baseAtk
   G.awakenings++;
-  flashAwaken();
   shake();
   log('🌅 觉醒！'+bonus.desc,'boss');
   notif('🌅 觉醒成功！'+bonus.desc,'#c9a84c');
@@ -1239,7 +1259,6 @@ function checkMilestone(stage) {
   if(m.cdmg)    G.critDmg+=m.cdmg;
   if(m.atkMult) G.baseAtk=Math.floor(G.baseAtk*m.atkMult);
   log('🏆 里程碑 Stage '+stage+'！'+m.desc,'ms');
-  flashMS('🏆 Stage '+stage+'\n'+m.desc);
   updateStats();
 }
 
@@ -1369,7 +1388,11 @@ function gainExp(amt) {
     G.baseAtk=Math.floor(G.baseAtk*1.1+2);
     G.atkSpd=Math.min(+(G.atkSpd+0.05).toFixed(2),spdCap());
     log('⬆ LEVEL UP! Lv.'+G.level+' ATK+10% SPD+0.05','win');
-    flashLvl(); pop('s-level'); pop('s-atk');
+    pop('s-level'); pop('s-atk');
+    // Berserker lv skill
+    if(hasSkill('berserker_lv')){ const sk=SKILLS.find(s=>s.id==='berserker_lv'); if(sk&&sk.onLevelUp) sk.onLevelUp(); }
+    // Scholar talent
+    if(T.id==='scholar'&&T.onLevelUp) T.onLevelUp();
     // Check skill unlocks
     const newSkills=getUnlockableSkills().filter(s=>s.unlockLv===G.level);
     if(newSkills.length) {
@@ -1384,8 +1407,59 @@ function gainExp(amt) {
 let atkI=null, tmrI=null, dpsI=null, berserkI=null;
 G._berserkActive=false;
 
+function unitAtk(unit) {
+  if(!unit) return totalAtk();
+  const role = typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
+  const roleMult = role ? role.baseAtk : 1;
+  // Unit base ATK scales with main character's ATK × role multiplier
+  let a = Math.floor(totalAtk() * roleMult);
+  // Unit gear bonus
+  if(unit.gear){
+    for(const g of Object.values(unit.gear)){
+      a += g.totalAtk||0;
+      // Gem ATK %
+      if(g.gemAtk) a = Math.floor(a*(1+g.gemAtk/100));
+    }
+  }
+  // Role special passives
+  if(role){
+    if(role.id==='mage') a = Math.floor(a * 0.7); // mage deals less direct dmg but has true dmg
+    if(role.id==='tank') a = Math.floor(a * 0.5); // tank deals less dmg
+  }
+  return Math.max(1, a);
+}
+
+function unitSpd(unit) {
+  if(!unit) return totalSpd();
+  const role = typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
+  let s = totalSpd() * (role ? role.baseSpd : 1);
+  if(unit.gear){ for(const g of Object.values(unit.gear)) s += g.totalSpd||0; }
+  return Math.min(+(s.toFixed(2)), spdCap()*(role?role.baseSpd:1)*1.5);
+}
+
+function unitCrit(unit) {
+  if(!unit) return totalCrit();
+  const role = typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
+  let c = totalCrit() * (role ? role.baseCrit : 1);
+  if(unit.gear){ for(const g of Object.values(unit.gear)) c += g.totalCrit||0; }
+  return Math.max(0, c);
+}
+
+function unitCritDmg(unit) {
+  if(!unit) return totalCritDmg();
+  const role = typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
+  let c = totalCritDmg() * (role ? role.baseCdmg : 1) + (G.teamCdmgBonus||0);
+  if(unit.gear){ for(const g of Object.values(unit.gear)) c += g.totalCdmg||0; }
+  return c;
+}
+
 function calcDmg() {
-  let dmg=totalAtk();
+  // Get current attacking unit
+  const activeUnits = G.units ? G.units.filter(u=>u.unlocked) : [];
+  const unit = activeUnits.length > 1 ? activeUnits[(G.activeUnit-1+activeUnits.length)%activeUnits.length] : null;
+  const role = unit && typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
+
+  let dmg = unit ? unitAtk(unit) : totalAtk();
   const pct=G.enemyMax>0?G.enemyHP/G.enemyMax:1;
 
   // ── GEAR PATH IDENTITY ──
@@ -1434,8 +1508,29 @@ function calcDmg() {
     }
   }
 
-  // Boss phase ATK multiplier (player gets stronger when boss phases)
+  // Boss phase ATK multiplier
   if(G.isBoss&&G.bossAtkMult&&G.bossAtkMult>1) dmg=Math.floor(dmg*G.bossAtkMult);
+  // Role-specific passives
+  if(role){
+    if(role.id==='assassin'){
+      // Assassin: each combo = +5% dmg
+      dmg=Math.floor(dmg*(1+(unit.combo||0)*0.05));
+    }
+    if(role.id==='mage'){
+      // Mage: flat true damage per hit (3% of enemy max HP)
+      const mageTrueDmg=Math.floor(G.enemyMax*0.03*(1+(G.teamTruePct||0)));
+      dmg+=mageTrueDmg;
+    }
+    if(role.id==='tank'){
+      // Tank: boosts team ATK instead of dealing damage
+      G.teamAtkBoost=(G.teamAtkBoost||0)+1;
+    }
+    if(role.id==='warrior'){
+      // Warrior: burst every 5 hits
+      unit.hitCount=(unit.hitCount||0)+1;
+      if(unit.hitCount>=5){ unit.hitCount=0; dmg=Math.floor(dmg*3); }
+    }
+  }
   // Executioner talent
   if(T.id==='executioner'&&T.dmgMult) dmg=Math.floor(dmg*T.dmgMult(pct));
   // Affix: thunder
@@ -1445,8 +1540,10 @@ function calcDmg() {
   }
   // Passive demolish
   if(G.pb.demolish&&Math.random()<G.pb.demolish) tMult=Math.max(tMult,3);
-  const isCrit=Math.random()*100<totalCrit();
-  if(isCrit) dmg=Math.floor(dmg*(totalCritDmg()/100));
+  const critRate = unit ? unitCrit(unit) : totalCrit();
+  const critDmgRate = unit ? unitCritDmg(unit) : totalCritDmg();
+  const isCrit=Math.random()*100<critRate;
+  if(isCrit) dmg=Math.floor(dmg*(critDmgRate/100));
   else dmg=Math.floor(dmg*(0.9+Math.random()*.2));
   dmg=Math.floor(dmg*tMult);
   // Mirror talent
@@ -1486,8 +1583,6 @@ function startFight() {
   G.enemyShield=eType.id==='elite'?Math.floor(G.enemyMax*eType.shieldPct):0;
   G._berserkActive=false;
   if(typeof updateZoneBadge==='function') updateZoneBadge();
-  if(typeof updateBattleScene==='function') updateBattleScene();
-  if(typeof updateBossPhaseGlow==='function') updateBossPhaseGlow();
 
   // Stage modifier — every 7 stages roll a random modifier
   if(typeof STAGE_MODIFIERS!=='undefined'&&G.stage%7===0&&!G.isBoss){
@@ -1626,7 +1721,7 @@ function runTimers() {
     // Combo system — combo stacks multiply damage
     if(isCrit){
       G.combo++; if(G.combo>G.bestCombo) G.bestCombo=G.combo;
-      if(G.combo>=5&&G.combo%5===0){ log('🔥 '+G.combo+'连暴击！伤害×'+(1+G.combo*0.05).toFixed(1),'combo'); flashCombo(G.combo); }
+      if(G.combo>=5&&G.combo%5===0){ log('🔥 '+G.combo+'连暴击！伤害×'+(1+G.combo*0.05).toFixed(1),'combo'); }
       G.crits++; updateTaskProgress('crits',1);
     } else {
       if(G.combo>=10) log('💔 连击中断 '+G.combo+'连','sys');
@@ -1648,7 +1743,6 @@ function runTimers() {
           if(phase.shieldPct) G.enemyShield=Math.floor(G.enemyMax*phase.shieldPct);
           if(phase.timeCut) G.timeLimit=Math.ceil(G.timeLimit*phase.timeCut);
           log(phase.msg,'boss'); notif(phase.name+'！','#c9a84c'); shake(); spawnParts('boss');
-          if(typeof updateBossPhaseGlow==='function') updateBossPhaseGlow();
           break;
         }
       }
@@ -1661,8 +1755,6 @@ function runTimers() {
     }
 
     spawnDmg(totalHit, isCrit, special||skillLabel!=='');
-    if(typeof triggerAttackAnim==='function') triggerAttackAnim();
-    if(typeof triggerEnemyHurt==='function') triggerEnemyHurt();
     if(skillLabel&&G.speed<=3) log(skillLabel+' -'+fmt(totalHit),'skill');
     else if(G.speed<=2){
       if(special) log('🌩 -'+fmt(totalHit),'ev');
@@ -1712,6 +1804,38 @@ function runTimers() {
       setTimeout(()=>{ G._berserkActive=false; }, 3000/G.speed);
     }, berserkMs);
   }
+  // Unit sync skill - all units attack together every 30 sec
+  if(hasSkill('unit_sync')){
+    setInterval(()=>{
+      if(G.enemyHP<=0) return;
+      const units=(G.units||[]).filter(u=>u.unlocked);
+      if(units.length<2) return;
+      let syncDmg=0;
+      units.forEach(u=>{ syncDmg+=unitAtk(u); });
+      syncDmg=Math.floor(syncDmg*(1+totalCritDmg()/100));
+      G.enemyHP=Math.max(0,G.enemyHP-syncDmg);
+      G.totalDmgFight+=syncDmg; G.totalDmg+=syncDmg;
+      log('🔗 单位同步！全队齐攻 -'+fmt(syncDmg),'skill');
+      spawnDmg(syncDmg,true,true);
+      if(G.enemyHP<=0) onWin();
+    }, 30000/G.speed);
+  }
+  // Mana burst skill - fires at 30s mark
+  if(hasSkill('mana_burst')){
+    const mbMs=30000/G.speed;
+    setTimeout(()=>{
+      const sk=SKILLS.find(s=>s.id==='mana_burst');
+      if(sk&&!sk.state.fired&&G.enemyHP>0){
+        sk.state.fired=true;
+        const mbDmg=Math.floor(totalAtk()*10);
+        G.enemyHP=Math.max(0,G.enemyHP-mbDmg);
+        G.totalDmgFight+=mbDmg; G.totalDmg+=mbDmg;
+        log('💜 魔力爆发！-'+fmt(mbDmg),'skill');
+        spawnDmg(mbDmg,true,true); shake();
+        if(G.enemyHP<=0) onWin();
+      }
+    }, mbMs);
+  }
 }
 
 function updateCombatUI() {
@@ -1760,10 +1884,12 @@ function updateCombatUI() {
 
 function onWin() {
   stopTimers();
-  G._spdStack=0; // SPD path stack resets each fight
+  G._spdStack=0;
   G._critChain=0;
   G._atkHitCount=0;
   G._isBurst=false;
+  // Reset unit combos
+  if(G.units) G.units.forEach(u=>{ u.combo=0; u.hitCount=0; });
   G.wins++; G.streak++; G.combo=0;
   if(G.streak>G.bestStreak) G.bestStreak=G.streak;
   const eType=getEnemyType(G.stage);
@@ -2005,15 +2131,11 @@ function initGame() {
       log('每10关Boss · 每5关精英怪 · 装备页选择强化路线','sys');
     }
     startFight(); runTimers(); checkAchs();
-    if(typeof initBattleScene==='function') initBattleScene();
     if(typeof showGachaTabIfUnlocked==='function') showGachaTabIfUnlocked();
   if(typeof showDungeonTabIfUnlocked==='function') showDungeonTabIfUnlocked();
   } catch(e) {
     console.error('initGame crash:', e);
-    // Hard reset if corrupt save
-    if(e.message&&(e.message.includes('undefined')||e.message.includes('null'))){
-      localStorage.removeItem('chronicle_v2');
-      location.reload();
-    }
+    // Log error but NEVER auto-reset - let player decide
+    try{ log('⚠ 初始化错误: '+e.message,'sys'); }catch(_){}
   }
 }

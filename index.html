@@ -76,27 +76,6 @@
       <span id="upgrade-hint">加载中...</span>
     </div>
 
-    <!-- ── PIXEL BATTLE SCENE ── -->
-    <div id="battle-scene">
-      <div id="scene-bg" class="zone-plains"></div>
-      <div id="scene-ground"></div>
-      <!-- Player sprite (CSS box-shadow pixel art) -->
-      <div class="sprite" id="sprite-player"></div>
-      <!-- Enemy sprite -->
-      <div class="sprite" id="sprite-enemy"></div>
-      <!-- Boss sprite (hidden when not boss) -->
-      <div class="sprite" id="sprite-boss" style="display:none"></div>
-      <!-- HP bars -->
-      <div class="sprite-hp-bar" id="player-sprite-hp" style="display:none">
-        <div class="sprite-hp-fill" id="player-sprite-hp-fill"></div>
-      </div>
-      <!-- Attack slash -->
-      <div id="attack-slash">⚡</div>
-      <!-- Zone decorations -->
-      <div class="zone-deco" id="deco-left"></div>
-      <div class="zone-deco" id="deco-right"></div>
-    </div>
-
     <div id="combat-card">
       <div id="combat-top">
         <div>
@@ -379,17 +358,9 @@
 
 <!-- FX LAYERS -->
 <div id="fx"></div>
-<div id="crit-flash"></div>
 <div id="particles"></div>
 
 <!-- FLASH OVERLAYS -->
-<div class="flash" id="flash-legend"> <div class="ft" id="fl-leg">⭐ 传说装备 ⭐</div></div>
-<div class="flash" id="flash-myth">   <div class="ft" id="fl-myth">🌠 神话装备 🌠</div></div>
-<div class="flash" id="flash-epic">   <div class="ft" id="fl-epic">💜 史诗装备</div></div>
-<div class="flash" id="flash-lvl">    <div class="ft">LEVEL UP!</div></div>
-<div class="flash" id="flash-ms">     <div class="ft" id="fl-ms"></div></div>
-<div class="flash" id="flash-awaken"> <div class="ft">🌅 AWAKENING 🌅</div></div>
-<div id="flash-combo">                <div class="ft" id="fl-combo"></div></div>
 <div id="notifs"></div>
 
 <script src="data.js"></script>
@@ -1161,10 +1132,28 @@ function renderTeam() {
       if(unlocked&&unit){
         // Stats
         const statsDiv=document.createElement('div');
-        statsDiv.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:.6rem;margin-bottom:8px;';
-        const s=[['ATK',fmt(Math.floor(10*role.baseAtk))],['SPD',(1.0*role.baseSpd).toFixed(1)],['CRIT',Math.floor(5*role.baseCrit)+'%'],['CDmg',Math.floor(200*role.baseCdmg)+'%']];
-        s.forEach(([k,v])=>{ statsDiv.innerHTML+='<div style="background:var(--s2);border-radius:4px;padding:4px 6px;"><span style="color:var(--tx3)">'+k+' </span><span style="color:var(--gold2);font-weight:700">'+v+'</span></div>'; });
+        statsDiv.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:.58rem;margin-bottom:8px;';
+        const uAtk=typeof unitAtk==='function'?unitAtk(unit):Math.floor(10*role.baseAtk);
+        const uSpd=typeof unitSpd==='function'?unitSpd(unit):(1.0*role.baseSpd).toFixed(1);
+        const s=[['ATK',fmt(uAtk),'var(--ember2)'],['SPD',typeof uSpd==='number'?uSpd.toFixed(1):uSpd,'var(--jade2)'],['CRIT',Math.floor(unitCrit?unitCrit(unit):5*role.baseCrit)+'%','var(--gold2)'],['CDmg',Math.floor(unitCritDmg?unitCritDmg(unit):200*role.baseCdmg)+'%','var(--ember)']];
+        s.forEach(([k,v,c])=>{ statsDiv.innerHTML+='<div style="background:var(--s2);border-radius:4px;padding:4px 5px;text-align:center"><div style="font-size:.44rem;color:var(--tx3)">'+k+'</div><div style="color:'+c+';font-weight:700">'+v+'</div></div>'; });
         card.appendChild(statsDiv);
+        // Unit gear summary
+        if(unit.gear){
+          const gearDiv=document.createElement('div');
+          gearDiv.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:6px;';
+          ['weapon','head','body','legs'].forEach(slot=>{
+            const g=unit.gear[slot];
+            const sl=document.createElement('div');
+            sl.style.cssText='background:var(--s2);border:1px solid var(--bd);border-radius:5px;padding:4px;text-align:center;cursor:pointer;font-size:.5rem;';
+            const SICONS={weapon:'⚔',head:'🪖',body:'🧥',legs:'👖'};
+            sl.innerHTML=SICONS[slot]+'<br><span style="color:var(--tx3)">'+(g&&g.pathId?'Lv'+g.pathLv:'空')+'</span>';
+            sl.title=(g&&g.pathId?g.name:'未选路线')+' — 点击强化';
+            sl.onclick=()=>openUnitGearModal(unit,slot);
+            gearDiv.appendChild(sl);
+          });
+          card.appendChild(gearDiv);
+        }
       } else if(!unlocked&&req){
         const unlockBtn=document.createElement('button');
         const canUnlock=G.best>=req.stage&&G.gold>=req.gold;
@@ -1176,6 +1165,65 @@ function renderTeam() {
       list.appendChild(card);
     });
   }
+}
+
+// ── UNIT GEAR MODAL ──────────────────────────────────
+function openUnitGearModal(unit, slot) {
+  if(!unit||!unit.gear) return;
+  const g=unit.gear[slot];
+  const SNAMES={weapon:'武器',head:'头部',body:'身体',legs:'腿部'};
+  const SICONS={weapon:'⚔',head:'🪖',body:'🧥',legs:'👖'};
+  $('m-title').textContent=unit.name+' — '+SICONS[slot]+SNAMES[slot];
+  $('m-extra').textContent='';
+  const body=$('m-body'); body.innerHTML='';
+  const btns=$('m-btns'); btns.innerHTML='';
+
+  if(!g.pathId){
+    // Show path choices
+    const hd=document.createElement('div');
+    hd.style.cssText='font-size:.6rem;color:var(--gold);margin-bottom:8px;';
+    hd.textContent='选择强化路线：';
+    body.appendChild(hd);
+    const paths=GEAR_PATHS[slot]||[];
+    paths.forEach(path=>{
+      const mat=UPGRADE_MATS[path.mat]||{icon:'?',name:'?'};
+      const btn=document.createElement('button');
+      btn.style.cssText='width:100%;background:var(--s2);border:1px solid var(--bd2);border-radius:7px;padding:9px;cursor:pointer;text-align:left;margin-bottom:5px;display:flex;align-items:center;gap:8px;';
+      btn.innerHTML='<span style="font-size:1.1rem">'+path.icon+'</span><div><div style="font-size:.7rem;font-weight:700;color:var(--tx)">'+path.name+'</div><div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+path.desc+'</div><div style="font-size:.52rem;color:'+mat.color+';margin-top:2px">消耗：'+mat.icon+' '+mat.name+'</div></div>';
+      btn.onclick=()=>{ g.pathId=path.id; g.name=path.name; recomputeGearStats(g); recalcEq(); closeModal(); renderTeam(); updateStats(); };
+      body.appendChild(btn);
+    });
+  } else {
+    // Show upgrade info
+    const paths=GEAR_PATHS[slot]||[];
+    const path=paths.find(p=>p.id===g.pathId);
+    if(path){
+      const lv=g.pathLv||0;
+      const nextLv=path.levels[lv];
+      const mat=UPGRADE_MATS[path.mat]||{icon:'?',name:'?'};
+      const have=G.upgMats[path.mat]||0;
+      const info=document.createElement('div');
+      info.style.cssText='font-size:.66rem;line-height:1.8;color:var(--tx3);margin-bottom:10px;';
+      info.innerHTML='<b style="color:var(--gold)">'+path.icon+' '+path.name+'</b><br>等级: '+lv+(nextLv?'→'+(lv+1):' (满级)')+'<br>属性: ATK+'+Math.floor((g.totalAtk||0))+' SPD+'+(g.totalSpd||0)+' Crit+'+(g.totalCrit||0)+'%<br>'+
+        (nextLv?'升级费用: '+mat.icon+' '+nextLv.cost+' '+mat.name+'<br>拥有: '+have:'');
+      body.appendChild(info);
+      if(nextLv&&have>=nextLv.cost){
+        const upBtn=document.createElement('button');
+        upBtn.style.cssText='width:100%;padding:10px;background:rgba(58,158,110,.1);border:1px solid var(--jade);border-radius:7px;color:var(--jade2);font-family:"JetBrains Mono",monospace;font-size:.68rem;cursor:pointer;margin-bottom:5px;';
+        upBtn.textContent='⬆ 强化';
+        upBtn.onclick=()=>{ G.upgMats[path.mat]-=nextLv.cost; g.pathLv=(g.pathLv||0)+1; recomputeGearStats(g); recalcEq(); updateStats(); openUnitGearModal(unit,slot); };
+        body.appendChild(upBtn);
+        const bulkBtn=document.createElement('button');
+        bulkBtn.style.cssText='width:100%;padding:8px;background:rgba(201,168,76,.1);border:1px solid var(--goldd);border-radius:7px;color:var(--gold2);font-family:"JetBrains Mono",monospace;font-size:.62rem;cursor:pointer;';
+        bulkBtn.textContent='全部强化';
+        bulkBtn.onclick=()=>{ let n=0; while(true){ const lv=g.pathLv||0; const nd=path.levels[lv]; if(!nd||( G.upgMats[path.mat]||0)<nd.cost||n>200) break; G.upgMats[path.mat]-=nd.cost; g.pathLv=lv+1; n++; } recomputeGearStats(g); recalcEq(); updateStats(); openUnitGearModal(unit,slot); };
+        body.appendChild(bulkBtn);
+      }
+    }
+  }
+  const cancel=document.createElement('button'); cancel.className='m-btn m-no'; cancel.textContent='关闭'; cancel.onclick=closeModal;
+  btns.appendChild(cancel);
+  $('overlay').classList.add('on');
 }
 
 // ── SETTINGS RENDER ──────────────────────────────────
@@ -1364,110 +1412,6 @@ function updateZoneBadge() {
 
 // ── START ────────────────────────────────────────────────────
 
-// ══════════════════════════════════════════════════
-//  PIXEL ART BATTLE SCENE
-// ══════════════════════════════════════════════════
-
-// CSS box-shadow pixel sprites
-const SPRITES = {
-  // Player warrior sprite
-  player: `20px 0px 0 0 #0a0a15, 25px 0px 0 0 #0a0a15, 30px 0px 0 0 #0a0a15, 15px 5px 0 0 #0a0a15, 20px 5px 0 0 #f5e8d0, 25px 5px 0 0 #f5e8d0, 30px 5px 0 0 #f5e8d0, 35px 5px 0 0 #0a0a15, 15px 10px 0 0 #0a0a15, 20px 10px 0 0 #f5e8d0, 25px 10px 0 0 #d4b896, 30px 10px 0 0 #f5e8d0, 35px 10px 0 0 #0a0a15, 20px 15px 0 0 #0a0a15, 25px 15px 0 0 #0a0a15, 30px 15px 0 0 #0a0a15, 10px 20px 0 0 #0a0a15, 15px 20px 0 0 #c84820, 20px 20px 0 0 #c84820, 25px 20px 0 0 #c84820, 30px 20px 0 0 #c84820, 35px 20px 0 0 #0a0a15, 5px 25px 0 0 #0a0a15, 10px 25px 0 0 #c84820, 15px 25px 0 0 #c84820, 20px 25px 0 0 #d4b896, 25px 25px 0 0 #d4b896, 30px 25px 0 0 #c84820, 35px 25px 0 0 #c84820, 40px 25px 0 0 #0a0a15, 0px 30px 0 0 #0a0a15, 5px 30px 0 0 #c84820, 10px 30px 0 0 #c84820, 15px 30px 0 0 #d4b896, 20px 30px 0 0 #d4b896, 25px 30px 0 0 #d4b896, 30px 30px 0 0 #c84820, 35px 30px 0 0 #c84820, 40px 30px 0 0 #0a0a15, 5px 35px 0 0 #0a0a15, 10px 35px 0 0 #c84820, 15px 35px 0 0 #c84820, 20px 35px 0 0 #d4b896, 25px 35px 0 0 #d4b896, 30px 35px 0 0 #c84820, 35px 35px 0 0 #c84820, 40px 35px 0 0 #0a0a15, 10px 40px 0 0 #0a0a15, 15px 40px 0 0 #c84820, 20px 40px 0 0 #c84820, 25px 40px 0 0 #c84820, 30px 40px 0 0 #c84820, 35px 40px 0 0 #0a0a15, 15px 45px 0 0 #0a0a15, 20px 45px 0 0 #c84820, 25px 45px 0 0 #c84820, 30px 45px 0 0 #0a0a15, 10px 50px 0 0 #0a0a15, 15px 50px 0 0 #c84820, 20px 50px 0 0 #c84820, 25px 50px 0 0 #c84820, 30px 50px 0 0 #c84820, 35px 50px 0 0 #0a0a15, 5px 55px 0 0 #0a0a15, 10px 55px 0 0 #c84820, 15px 55px 0 0 #c84820, 30px 55px 0 0 #c84820, 35px 55px 0 0 #c84820, 40px 55px 0 0 #0a0a15, 0px 60px 0 0 #0a0a15, 5px 60px 0 0 #c84820, 10px 60px 0 0 #c84820, 35px 60px 0 0 #c84820, 40px 60px 0 0 #c84820, 45px 60px 0 0 #0a0a15, 0px 65px 0 0 #0a0a15, 5px 65px 0 0 #c84820, 40px 65px 0 0 #c84820, 45px 65px 0 0 #0a0a15`,
-  // Enemy sprites per zone
-  goblin:     `12px 0px 0 0 #0a0a15, 18px 0px 0 0 #2a8040, 24px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #2a8040, 18px 6px 0 0 #40c060, 24px 6px 0 0 #2a8040, 30px 6px 0 0 #0a0a15, 0px 12px 0 0 #0a0a15, 6px 12px 0 0 #2a8040, 12px 12px 0 0 #40c060, 18px 12px 0 0 #ffffff, 24px 12px 0 0 #ffffff, 30px 12px 0 0 #2a8040, 36px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #2a8040, 12px 18px 0 0 #40c060, 18px 18px 0 0 #2a8040, 24px 18px 0 0 #2a8040, 30px 18px 0 0 #2a8040, 36px 18px 0 0 #0a0a15, 6px 24px 0 0 #0a0a15, 12px 24px 0 0 #2a8040, 18px 24px 0 0 #2a8040, 24px 24px 0 0 #2a8040, 30px 24px 0 0 #0a0a15, 12px 30px 0 0 #0a0a15, 18px 30px 0 0 #0a0a15, 24px 30px 0 0 #0a0a15, 6px 36px 0 0 #0a0a15, 18px 36px 0 0 #0a0a15, 30px 36px 0 0 #0a0a15`,
-  fire_demon: `18px 0px 0 0 #0a0a15, 24px 0px 0 0 #ff4400, 30px 0px 0 0 #0a0a15, 12px 6px 0 0 #0a0a15, 18px 6px 0 0 #ff4400, 24px 6px 0 0 #ff4400, 30px 6px 0 0 #0a0a15, 6px 12px 0 0 #0a0a15, 12px 12px 0 0 #ff4400, 18px 12px 0 0 #ff8800, 24px 12px 0 0 #ff4400, 30px 12px 0 0 #ff4400, 36px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #ff4400, 12px 18px 0 0 #ff8800, 18px 18px 0 0 #ff8800, 24px 18px 0 0 #ff8800, 30px 18px 0 0 #ff4400, 36px 18px 0 0 #ff4400, 42px 18px 0 0 #0a0a15, 0px 24px 0 0 #0a0a15, 6px 24px 0 0 #ff4400, 12px 24px 0 0 #ff4400, 18px 24px 0 0 #ff8800, 24px 24px 0 0 #ff8800, 30px 24px 0 0 #ff4400, 36px 24px 0 0 #ff4400, 42px 24px 0 0 #0a0a15, 6px 30px 0 0 #0a0a15, 12px 30px 0 0 #ff4400, 18px 30px 0 0 #ff4400, 24px 30px 0 0 #ff8800, 30px 30px 0 0 #ff4400, 36px 30px 0 0 #0a0a15, 12px 36px 0 0 #0a0a15, 18px 36px 0 0 #aa2200, 24px 36px 0 0 #882200, 30px 36px 0 0 #0a0a15, 6px 42px 0 0 #0a0a15, 12px 42px 0 0 #aa2200, 18px 42px 0 0 #882200, 24px 42px 0 0 #882200, 30px 42px 0 0 #0a0a15, 6px 48px 0 0 #0a0a15, 12px 48px 0 0 #882200, 18px 48px 0 0 #0a0a15`,
-  ice_golem:  `12px 0px 0 0 #0a0a15, 18px 0px 0 0 #6090c8, 24px 0px 0 0 #6090c8, 30px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #6090c8, 18px 6px 0 0 #90c0f0, 24px 6px 0 0 #90c0f0, 30px 6px 0 0 #6090c8, 36px 6px 0 0 #0a0a15, 0px 12px 0 0 #0a0a15, 6px 12px 0 0 #6090c8, 12px 12px 0 0 #90c0f0, 18px 12px 0 0 #90c0f0, 24px 12px 0 0 #90c0f0, 30px 12px 0 0 #90c0f0, 36px 12px 0 0 #6090c8, 42px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #6090c8, 12px 18px 0 0 #90c0f0, 18px 18px 0 0 #6090c8, 24px 18px 0 0 #6090c8, 30px 18px 0 0 #90c0f0, 36px 18px 0 0 #6090c8, 42px 18px 0 0 #0a0a15, 0px 24px 0 0 #0a0a15, 6px 24px 0 0 #6090c8, 12px 24px 0 0 #90c0f0, 18px 24px 0 0 #90c0f0, 24px 24px 0 0 #90c0f0, 30px 24px 0 0 #90c0f0, 36px 24px 0 0 #6090c8, 42px 24px 0 0 #0a0a15, 6px 30px 0 0 #0a0a15, 12px 30px 0 0 #6090c8, 18px 30px 0 0 #6090c8, 24px 30px 0 0 #6090c8, 30px 30px 0 0 #6090c8, 36px 30px 0 0 #0a0a15, 12px 36px 0 0 #0a0a15, 18px 36px 0 0 #6090c8, 24px 36px 0 0 #6090c8, 30px 36px 0 0 #0a0a15, 6px 42px 0 0 #0a0a15, 18px 42px 0 0 #0a0a15, 24px 42px 0 0 #0a0a15, 36px 42px 0 0 #0a0a15`,
-  // Boss sprite
-  boss: `0px 0px 0 0 #0a0a15, 18px 0px 0 0 #0a0a15, 24px 0px 0 0 #0a0a15, 30px 0px 0 0 #0a0a15, 36px 0px 0 0 #0a0a15, 42px 0px 0 0 #0a0a15, 48px 0px 0 0 #0a0a15, 54px 0px 0 0 #0a0a15, 60px 0px 0 0 #0a0a15, 66px 0px 0 0 #0a0a15, 84px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #0a0a15, 18px 6px 0 0 #8b0000, 24px 6px 0 0 #8b0000, 30px 6px 0 0 #8b0000, 36px 6px 0 0 #cc2200, 42px 6px 0 0 #cc2200, 48px 6px 0 0 #8b0000, 54px 6px 0 0 #8b0000, 60px 6px 0 0 #8b0000, 66px 6px 0 0 #0a0a15, 72px 6px 0 0 #0a0a15, 6px 12px 0 0 #0a0a15, 12px 12px 0 0 #8b0000, 18px 12px 0 0 #8b0000, 24px 12px 0 0 #8b0000, 30px 12px 0 0 #cc2200, 36px 12px 0 0 #cc2200, 42px 12px 0 0 #cc2200, 48px 12px 0 0 #cc2200, 54px 12px 0 0 #cc2200, 60px 12px 0 0 #8b0000, 66px 12px 0 0 #8b0000, 72px 12px 0 0 #8b0000, 78px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #8b0000, 12px 18px 0 0 #8b0000, 18px 18px 0 0 #cc2200, 24px 18px 0 0 #cc2200, 30px 18px 0 0 #cc2200, 36px 18px 0 0 #ff8c00, 42px 18px 0 0 #ff8c00, 48px 18px 0 0 #cc2200, 54px 18px 0 0 #cc2200, 60px 18px 0 0 #cc2200, 66px 18px 0 0 #8b0000, 72px 18px 0 0 #8b0000, 78px 18px 0 0 #0a0a15, 0px 24px 0 0 #0a0a15, 6px 24px 0 0 #8b0000, 12px 24px 0 0 #cc2200, 18px 24px 0 0 #cc2200, 24px 24px 0 0 #cc2200, 30px 24px 0 0 #ff8c00, 36px 24px 0 0 #ff8c00, 42px 24px 0 0 #ff8c00, 48px 24px 0 0 #ff8c00, 54px 24px 0 0 #cc2200, 60px 24px 0 0 #cc2200, 66px 24px 0 0 #cc2200, 72px 24px 0 0 #8b0000, 78px 24px 0 0 #0a0a15, 0px 30px 0 0 #0a0a15, 6px 30px 0 0 #8b0000, 12px 30px 0 0 #cc2200, 18px 30px 0 0 #cc2200, 24px 30px 0 0 #cc2200, 30px 30px 0 0 #cc2200, 36px 30px 0 0 #cc2200, 42px 30px 0 0 #cc2200, 48px 30px 0 0 #cc2200, 54px 30px 0 0 #cc2200, 60px 30px 0 0 #cc2200, 66px 30px 0 0 #8b0000, 72px 30px 0 0 #8b0000, 78px 30px 0 0 #0a0a15, 0px 36px 0 0 #0a0a15, 6px 36px 0 0 #0a0a15, 12px 36px 0 0 #8b0000, 18px 36px 0 0 #cc2200, 24px 36px 0 0 #cc2200, 30px 36px 0 0 #cc2200, 36px 36px 0 0 #cc2200, 42px 36px 0 0 #cc2200, 48px 36px 0 0 #cc2200, 54px 36px 0 0 #cc2200, 60px 36px 0 0 #8b0000, 66px 36px 0 0 #0a0a15, 72px 36px 0 0 #0a0a15, 6px 42px 0 0 #0a0a15, 12px 42px 0 0 #0a0a15, 18px 42px 0 0 #8b0000, 24px 42px 0 0 #cc2200, 30px 42px 0 0 #8b0000, 36px 42px 0 0 #8b0000, 42px 42px 0 0 #8b0000, 48px 42px 0 0 #cc2200, 54px 42px 0 0 #8b0000, 60px 42px 0 0 #0a0a15, 66px 42px 0 0 #0a0a15, 12px 48px 0 0 #0a0a15, 18px 48px 0 0 #8b0000, 24px 48px 0 0 #8b0000, 30px 48px 0 0 #8b0000, 36px 48px 0 0 #8b0000, 42px 48px 0 0 #8b0000, 48px 48px 0 0 #8b0000, 54px 48px 0 0 #0a0a15, 6px 54px 0 0 #0a0a15, 12px 54px 0 0 #8b0000, 18px 54px 0 0 #8b0000, 24px 54px 0 0 #0a0a15, 42px 54px 0 0 #0a0a15, 48px 54px 0 0 #8b0000, 54px 54px 0 0 #8b0000, 60px 54px 0 0 #0a0a15, 0px 60px 0 0 #0a0a15, 6px 60px 0 0 #8b0000, 12px 60px 0 0 #0a0a15, 42px 60px 0 0 #0a0a15, 48px 60px 0 0 #8b0000, 54px 60px 0 0 #0a0a15, 0px 66px 0 0 #0a0a15, 6px 66px 0 0 #0a0a15, 48px 66px 0 0 #0a0a15, 54px 66px 0 0 #0a0a15`,
-  // Fallback enemy
-  enemy_default: `12px 0px 0 0 #0a0a15, 18px 0px 0 0 #2a8040, 24px 0px 0 0 #0a0a15, 6px 6px 0 0 #0a0a15, 12px 6px 0 0 #2a8040, 18px 6px 0 0 #40c060, 24px 6px 0 0 #2a8040, 30px 6px 0 0 #0a0a15, 0px 12px 0 0 #0a0a15, 6px 12px 0 0 #2a8040, 12px 12px 0 0 #40c060, 18px 12px 0 0 #ffffff, 24px 12px 0 0 #ffffff, 30px 12px 0 0 #2a8040, 36px 12px 0 0 #0a0a15, 0px 18px 0 0 #0a0a15, 6px 18px 0 0 #2a8040, 12px 18px 0 0 #40c060, 18px 18px 0 0 #2a8040, 24px 18px 0 0 #2a8040, 30px 18px 0 0 #2a8040, 36px 18px 0 0 #0a0a15, 6px 24px 0 0 #0a0a15, 12px 24px 0 0 #2a8040, 18px 24px 0 0 #2a8040, 24px 24px 0 0 #2a8040, 30px 24px 0 0 #0a0a15, 12px 30px 0 0 #0a0a15, 18px 30px 0 0 #0a0a15, 24px 30px 0 0 #0a0a15, 6px 36px 0 0 #0a0a15, 18px 36px 0 0 #0a0a15, 30px 36px 0 0 #0a0a15`,
-};
-
-// Zone settings
-const ZONE_SCENES = {
-  '荒野平原': { bg:'zone-plains',  enemy:'goblin',     decoL:'🌿', decoR:'🌿' },
-  '暗影森林': { bg:'zone-forest',  enemy:'goblin',     decoL:'🌲', decoR:'🌲' },
-  '地狱火山': { bg:'zone-volcano', enemy:'fire_demon', decoL:'🔥', decoR:'🔥' },
-  '冰封王座': { bg:'zone-ice',     enemy:'ice_golem',  decoL:'❄',  decoR:'❄'  },
-  '虚空裂隙': { bg:'zone-void',    enemy:'enemy_default',decoL:'💫',decoR:'💫' },
-  '神明领域': { bg:'zone-void',    enemy:'enemy_default',decoL:'✨', decoR:'✨' },
-  '末日深渊': { bg:'zone-chaos',   enemy:'fire_demon', decoL:'💀', decoR:'💀' },
-  '混沌之源': { bg:'zone-chaos',   enemy:'fire_demon', decoL:'🔱', decoR:'🔱' },
-};
-
-function initBattleScene() {
-  // Set player sprite
-  const ps=$('sprite-player');
-  if(ps){ ps.style.boxShadow=SPRITES.player; ps.style.imageRendering='pixelated'; }
-  updateBattleScene();
-}
-
-function updateBattleScene() {
-  const zone = typeof getZone==='function' ? getZone(G.stage) : {name:'荒野平原'};
-  const scene = ZONE_SCENES[zone.name] || ZONE_SCENES['荒野平原'];
-  // Update background class
-  const bg=$('scene-bg');
-  if(bg){
-    bg.className=scene.bg;
-  }
-  // Update enemy sprite
-  const es=$('sprite-enemy');
-  const bs=$('sprite-boss');
-  if(G.isBoss){
-    if(es) es.style.display='none';
-    if(bs){
-      bs.style.display='block';
-      bs.style.boxShadow=SPRITES.boss;
-    }
-  } else {
-    if(bs) bs.style.display='none';
-    if(es){
-      es.style.display='block';
-      es.style.boxShadow=SPRITES[scene.enemy]||SPRITES.enemy_default;
-    }
-  }
-  // Zone decorations
-  const dl=$('deco-left'), dr=$('deco-right');
-  if(dl) dl.textContent=scene.decoL||'';
-  if(dr) dr.textContent=scene.decoR||'';
-}
-
-function triggerAttackAnim() {
-  if(G.speed>3) return;
-  const ps=$('sprite-player');
-  if(ps){
-    ps.classList.remove('attacking');
-    void ps.offsetWidth;
-    ps.classList.add('attacking');
-    setTimeout(()=>ps.classList.remove('attacking'), 220);
-  }
-  // Slash effect
-  const slash=$('attack-slash');
-  if(slash){
-    slash.classList.remove('show');
-    void slash.offsetWidth;
-    slash.classList.add('show');
-  }
-}
-
-function triggerEnemyHurt() {
-  if(G.speed>3) return;
-  const es=G.isBoss?$('sprite-boss'):$('sprite-enemy');
-  if(es){
-    es.classList.remove('hurt');
-    void es.offsetWidth;
-    es.classList.add('hurt');
-    setTimeout(()=>es.classList.remove('hurt'), 160);
-  }
-}
-
-function updateBossPhaseGlow() {
-  const bs=$('sprite-boss'); if(!bs) return;
-  bs.className='sprite';
-  const p=G.bossPhasesDone||0;
-  if(p>=3) bs.classList.add('phase3');
-  else if(p>=2) bs.classList.add('phase2');
-  else if(p>=1) bs.classList.add('phase1');
-}
 
 window.addEventListener('load', ()=>{
   if(!G.startTime) G.startTime=Date.now();

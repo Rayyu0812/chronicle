@@ -1536,3 +1536,176 @@ const UNIT_UNLOCK_REQS = {
   mage:     { stage:100, gold:50000,  desc:'到达Stage 100 + 50000金' },
   tank:     { stage:200, gold:200000, desc:'到达Stage 200 + 200000金' },
 };
+
+// ═══════════════════════════════════════════════════════
+//  FINAL CONTENT EXPANSION
+// ═══════════════════════════════════════════════════════
+
+// ── 20 MORE SKILLS (total 50) ─────────────────────────
+const SKILLS_EX = [
+  // Unlocked every 10 levels from 10-100 (we already have 30)
+  // These are UNIT-specific skills (apply to the active unit)
+  {
+    id:'unit_sync',    type:'special', icon:'🔗', name:'单位同步', unlockLv:10,
+    desc:'所有单位同时攻击一次（每30秒触发）',
+    state:{ timer:0 },
+    passive:true
+  },
+  {
+    id:'formation',    type:'buff',    icon:'🛡', name:'阵型', unlockLv:20,
+    desc:'队伍单位越多，全队ATK越高（每单位+15%）',
+    atkBonus:()=>((G.units||[]).filter(u=>u.unlocked).length-1)*0.15
+  },
+  {
+    id:'chain_kill',   type:'atk',    icon:'⛓', name:'连杀', unlockLv:30,
+    desc:'每次胜利+1%ATK（可无限叠加，重置时保留）',
+    onWin:()=>{ G.chainKillStacks=(G.chainKillStacks||0)+1; G.skillBonusAtk=(G.skillBonusAtk||0)+Math.floor(totalAtk()*0.01); }
+  },
+  {
+    id:'berserker_lv', type:'buff',   icon:'🩸', name:'狂战升华', unlockLv:40,
+    desc:'每次升级ATK额外+5%',
+    onLevelUp:()=>{ G.skillBonusAtk=(G.skillBonusAtk||0)+Math.floor(totalAtk()*0.05); }
+  },
+  {
+    id:'void_strike',  type:'atk',   icon:'🌑', name:'虚空冲击', unlockLv:50,
+    desc:'无视所有防御，造成纯粹伤害（忽略boss护盾）',
+    truePct:0.05, ignoreshield:true
+  },
+  {
+    id:'mana_burst',   type:'atk',   icon:'💜', name:'魔力爆发', unlockLv:60,
+    desc:'每场战斗开始后30秒，造成ATK×10伤害',
+    state:{ fired:false },
+    onFightStart:()=>{ SKILLS.find(s=>s.id==='mana_burst').state.fired=false; },
+    passive:true
+  },
+  {
+    id:'last_stand',   type:'buff',  icon:'🏴', name:'最后一击', unlockLv:70,
+    desc:'时间剩余10秒以内，ATK×5',
+    atkBonus:()=>(G.timeLimit-G.timeEl<=10&&G.timeEl>0)?4:0
+  },
+  {
+    id:'infinity',     type:'special',icon:'♾', name:'无限', unlockLv:80,
+    desc:'ATK上限移除（无任何数值上限）',
+    passive:true
+  },
+  {
+    id:'god_speed',    type:'buff',  icon:'⚡', name:'神速', unlockLv:90,
+    desc:'SPD永久×1.5（立即生效）',
+    passive:true
+  },
+  {
+    id:'omega',        type:'special',icon:'Ω', name:'Ω终焉', unlockLv:100,
+    desc:'所有技能效果×2（包括自身）',
+    passive:true
+  },
+  // Bonus skills (beyond level 100 - from achievements)
+  {
+    id:'prestige_power',type:'buff', icon:'🔱', name:'转生之力', unlockLv:999,
+    desc:'每次转生永久+10%ATK（通过成就解锁）',
+    atkBonus:()=>(G.prestigeCount||0)*0.10
+  },
+  {
+    id:'rune_mastery', type:'buff',  icon:'✨', name:'符文精通', unlockLv:999,
+    desc:'每个装备符文效果×2（通过符文系统解锁）',
+    passive:true
+  },
+  {
+    id:'team_power',   type:'buff',  icon:'👥', name:'队伍之力', unlockLv:999,
+    desc:'每个解锁角色，主角ATK+20%（通过队伍解锁）',
+    atkBonus:()=>((G.units||[]).filter(u=>u.unlocked).length-1)*0.20
+  },
+  {
+    id:'zone_master',  type:'buff',  icon:'🗺', name:'区域精通', unlockLv:999,
+    desc:'进入越深的区域，ATK倍率越高',
+    atkBonus:()=>{
+      const zone=typeof getZone==='function'?getZone(G.stage):{enemyMult:1};
+      return (zone.enemyMult-1)*0.5;
+    }
+  },
+  {
+    id:'eternal_combo', type:'atk', icon:'🔥', name:'永恒连击', unlockLv:999,
+    desc:'最高连击记录永久转化为ATK加成',
+    atkBonus:()=>G.bestCombo*0.01
+  },
+];
+SKILLS.push(...SKILLS_EX);
+
+// ── EXTENDED SHOP (phase E monetization stubs) ────────
+const SHOP_MONETIZATION = [
+  { id:'mon_crystal_small', n:'传说水晶×100', d:'100x祈愿货币（高级）', icon:'💠', c:()=>50000, b:()=>{ earnGachaCrystals(100); } },
+  { id:'mon_crystal_big',   n:'传说水晶×500', d:'500x祈愿货币（豪华）', icon:'💠', c:()=>200000,b:()=>{ earnGachaCrystals(500); } },
+  { id:'mon_rune_chest',    n:'符文宝箱',     d:'随机T3-T4符文×3',      icon:'✨', c:()=>30000, b:()=>{
+    const t4=RUNES.filter(r=>r.tier>=3);
+    for(let i=0;i<3;i++){
+      const r=t4[~~(Math.random()*t4.length)];
+      if(r){ if(!G.runeInventory)G.runeInventory=[]; G.runeInventory.push(r.id); log('✨ 符文宝箱：'+r.name,'loot'); }
+    }
+  }},
+  { id:'mon_unit_unlock',   n:'角色解锁卷',   d:'直接解锁任意一个角色',   icon:'👥', c:()=>100000,b:()=>{
+    const locked=typeof UNIT_ROLES!=='undefined'?UNIT_ROLES.filter(r=>r.id!=='warrior'&&!(G.units||[]).some(u=>u.roleId===r.id)):[];
+    if(!locked.length){ notif('所有角色已解锁'); return; }
+    const role=locked[0];
+    const unit=makeUnit(role.id); unit.gear=makeInitialGear(); unit.unlocked=true;
+    if(!G.units)G.units=[]; G.units.push(unit);
+    calcTeamSynergies(); updateStats();
+    log('👥 解锁角色：'+unit.name,'boss'); notif('👥 '+unit.name+' 已解锁！','#c9a84c');
+    if(typeof renderTeam==='function') renderTeam();
+  }},
+  { id:'mon_prestige_boost',n:'转生加速',     d:'下次转生倍率额外×2',    icon:'🔱', c:()=>500000,b:()=>{ G.prestigeMult=(G.prestigeMult||1)*2; log('🔱 下次转生倍率×2','ev'); } },
+  { id:'mon_mythic_shard5', n:'神话碎片×5',   d:'5x神话碎片',            icon:'🌠', c:()=>80000, b:()=>{ G.upgMats.mythic_shard=(G.upgMats.mythic_shard||0)+5; } },
+];
+SHOP_CATALOG.push(...SHOP_MONETIZATION);
+
+// ── MORE ENEMY TYPES ───────────────────────────────────
+const ENEMY_TYPES_EX = [
+  { id:'ancient',  name:'远古怪',  hpMult:4,   gMult:3,   dropMult:3,  special:'phase2',  shieldPct:0.15 },
+  { id:'cursed',   name:'诅咒怪',  hpMult:2,   gMult:2,   dropMult:1.5,special:'regen',   regenPct:0.03 },
+  { id:'berserker',name:'狂战士',  hpMult:1.5, gMult:2,   dropMult:2,  special:'berserk', atkMult:3 },
+  { id:'shadow',   name:'暗影怪',  hpMult:3,   gMult:2.5, dropMult:2.5,special:'dodge',   dodgeChance:0.2 },
+];
+// Extend getEnemyType to include new types
+const _origGetEnemyType = getEnemyType;
+
+// ── EXTENDED RUNE COMBINATIONS ─────────────────────────
+const RUNE_SETS = [
+  {
+    id:'fury_set', name:'狂怒套装', icon:'🔥',
+    runes:['r_atk3','r_crit2','r_combo'],
+    bonus:{ desc:'攻击力×2，Combo无上限', apply:()=>{ G.baseAtk*=2; } }
+  },
+  {
+    id:'void_set',  name:'虚空套装', icon:'🌑',
+    runes:['r_true','r_spd3','r_time'],
+    bonus:{ desc:'时间+1分钟，真伤+5%', apply:()=>{ G.pb.extraTime+=60; G.runeTruePct+=0.05; } }
+  },
+  {
+    id:'myth_set',  name:'神话套装', icon:'🌠',
+    runes:['r_mythic','r_prestige','r_atk4'],
+    bonus:{ desc:'转生倍率×3，ATK×5', apply:()=>{ G.prestigeMult*=3; G.baseAtk=Math.floor(G.baseAtk*5); } }
+  },
+];
+
+// ── EXTENDED PASSIVE NODES ─────────────────────────────
+const PASSIVE_EX2_NODES = {
+  power:  [
+    { id:'p5', n:'战神之力',   d:'ATK+1000，每次Train额外+20',  c:2000000, req:'p4', e:()=>{ G.baseAtk+=1000; G.pb.trainFlat+=20; } },
+    { id:'p6', n:'混沌之力',   d:'ATK×2，解锁神话装备路线',     c:10000000,req:'p5', e:()=>{ G.baseAtk*=2; } },
+  ],
+  speed:  [
+    { id:'s5', n:'光速',       d:'SPD上限+3.0',                  c:2000000, req:'s4', e:()=>{ G.pb.spdCap+=3.0; } },
+    { id:'s6', n:'时间停止',   d:'战斗时间+300秒',               c:10000000,req:'s5', e:()=>{ G.pb.extraTime+=300; } },
+  ],
+  luck:   [
+    { id:'l5', n:'命运之轮',   d:'所有掉落率×3',                 c:3000000, req:'l4', e:()=>{ G.pb.dropRate+=1.0; G.pb.legMult*=3; } },
+    { id:'l6', n:'神明之选',   d:'每胜利5%获得传说+1%获得神话',  c:15000000,req:'l5', e:()=>{ G.pb.godBless=0.05; G.pb.mythicChance=0.01; } },
+  ],
+  mastery:[
+    { id:'m5', n:'神话大师',   d:'所有装备词条效果×2',           c:5000000, req:'m4', e:()=>{ G.pb.affixMult=2; } },
+    { id:'m6', n:'万物精通',   d:'所有系统效果×1.5',            c:20000000,req:'m5', e:()=>{ G.pb.allMult=1.5; } },
+  ],
+};
+// Merge into existing PASSIVES
+PASSIVES.forEach(track=>{
+  const ex=PASSIVE_EX2_NODES[track.id];
+  if(ex) track.nodes.push(...ex);
+});

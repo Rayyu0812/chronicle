@@ -350,11 +350,8 @@ body{font-family:'JetBrains Mono',monospace;color:var(--tx);
 #fx{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden;}
 .fdmg{position:absolute;font-family:'Cormorant Garamond',serif;font-weight:700;pointer-events:none;animation:fup .85s ease forwards;}
 .fdmg.n{font-size:.9rem;color:#fff;text-shadow:0 0 5px rgba(255,255,255,.4);}
-.fdmg.c{font-size:2.2rem;font-weight:700;color:#ff5000;
-  text-shadow:0 0 8px #fff,0 0 20px #ff6020,0 0 40px rgba(255,80,20,.8);
-  animation:fup-crit .9s ease forwards;}
-@keyframes fup-crit{
-  0%  {opacity:1;transform:translateY(0) scale(1.3);}
+.fdmg.c{font-size:2rem;font-weight:700;color:#ff5000;text-shadow:0 0 8px #fff,0 0 20px #ff6020;}
+
   20% {opacity:1;transform:translateY(-15px) scale(1.5) rotate(-5deg);}
   100%{opacity:0;transform:translateY(-80px) scale(.5) rotate(5deg);}
 }
@@ -367,40 +364,33 @@ body{font-family:'JetBrains Mono',monospace;color:var(--tx);
 /* flash overlays */
 .flash{position:fixed;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;z-index:98;opacity:0;}
 .flash.show{animation:flash-a var(--dur,.9s) ease forwards;}
-@keyframes flash-a{0%{opacity:0;transform:scale(.7);}15%{opacity:1;transform:scale(1.08);}80%{opacity:1;}100%{opacity:0;}}
-#flash-legend{--dur:2.2s;}
-#flash-legend .ft{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:700;color:var(--gold);
-  text-shadow:0 0 40px rgba(201,168,76,.9),0 0 80px rgba(201,168,76,.4);letter-spacing:.15em;text-align:center;line-height:1.5;}
-#flash-myth{--dur:2.5s;}
-#flash-myth .ft{font-family:'Cormorant Garamond',serif;font-size:1.4rem;font-weight:700;color:#e8e8ff;
-  text-shadow:0 0 40px rgba(255,255,255,.9),0 0 80px rgba(200,200,255,.5);letter-spacing:.15em;text-align:center;line-height:1.5;}
-#flash-epic{--dur:1.5s;}
-#flash-epic .ft{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:700;color:var(--violet2);
-  text-shadow:0 0 30px rgba(139,92,246,.8);text-align:center;}
-#flash-lvl{--dur:.9s;}
-#flash-lvl .ft{font-family:'Cormorant Garamond',serif;font-size:1.8rem;font-weight:700;color:var(--gold);
-  text-shadow:0 0 40px rgba(201,168,76,.9);letter-spacing:.2em;}
-#flash-ms{--dur:1.5s;}
-#flash-ms .ft{font-family:'Cormorant Garamond',serif;font-size:1.1rem;font-weight:700;color:var(--ice2);
-  text-shadow:0 0 30px rgba(74,159,212,.7);text-align:center;}
-#flash-awaken{--dur:2s;}
-#flash-awaken .ft{font-family:'Cormorant Garamond',serif;font-size:1.5rem;font-weight:700;
-  background:linear-gradient(135deg,var(--gold),var(--violet2),var(--ice2));
-  -webkit-background-clip:text;-webkit-text-fill-color:transparent;letter-spacing:.2em;}
-#flash-combo{position:fixed;top:28%;left:50%;transform:translateX(-50%);pointer-events:none;z-index:97;opacity:0;}
+15%{opacity:1;transform:scale(1.08);}80%{opacity:1;}100%{opacity:0;}}
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 /* Crit screen flash */
 #crit-flash{position:fixed;inset:0;pointer-events:none;z-index:48;opacity:0;background:rgba(255,60,0,.12);border:2px solid rgba(255,80,20,.4);}
 #crit-flash.show{animation:crit-flash-a .25s ease forwards;}
-@keyframes crit-flash-a{0%{opacity:1;}100%{opacity:0;}}
+100%{opacity:0;}}
 
 /* Build identity visual indicators */
 .build-atk-active #combat-card{border-color:rgba(212,82,42,.5);}
 .build-spd-active #combat-card{border-color:rgba(58,158,110,.5);}
 .build-crit-active #combat-card{border-color:rgba(201,168,76,.5);}
-#flash-combo.show{animation:combo-a .6s ease forwards;}
-@keyframes combo-a{0%{opacity:0;transform:translateX(-50%) scale(.5);}30%{opacity:1;transform:translateX(-50%) scale(1.2);}70%{opacity:1;transform:translateX(-50%) scale(1);}100%{opacity:0;}}
-#flash-combo .ft{font-family:'Cormorant Garamond',serif;font-size:1.3rem;font-weight:700;color:var(--ember2);text-shadow:0 0 20px rgba(212,82,42,.8);}
+
+30%{opacity:1;transform:translateX(-50%) scale(1.2);}70%{opacity:1;transform:translateX(-50%) scale(1);}100%{opacity:0;}}
+
 
 @keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-4px);}75%{transform:translateX(4px);}}
 #root.shake{animation:shake .25s ease;}
@@ -411,237 +401,3 @@ body{font-family:'JetBrains Mono',monospace;color:var(--tx);
 .notif.out{animation:nout .25s ease forwards;}
 @keyframes nin{to{opacity:1;transform:translateX(0);}}
 @keyframes nout{to{opacity:0;transform:translateX(20px);}}
-
-/* ═══════════════════════════════════════════════════════
-   PIXEL ART SYSTEM
-   All sprites use CSS box-shadow technique
-   1px div + box-shadow = pixel art, no images needed
-═══════════════════════════════════════════════════════ */
-
-/* ── BATTLE SCENE ── */
-#battle-scene {
-  flex-shrink:0;
-  height:120px;
-  position:relative;
-  overflow:hidden;
-  border-radius:10px;
-  margin:0 8px 6px;
-  background:#0a0a18;
-  border:1px solid var(--bd2);
-  image-rendering:pixelated;
-}
-
-/* Zone backgrounds via CSS */
-#scene-bg {
-  position:absolute;
-  inset:0;
-  transition:background .5s;
-  image-rendering:pixelated;
-}
-.zone-plains  { background:linear-gradient(180deg,#1a3010 0%,#2a5020 40%,#3a6820 60%,#4a4010 100%); }
-.zone-forest  { background:linear-gradient(180deg,#0a1a08 0%,#1a3010 40%,#2a4820 60%,#1a2a10 100%); }
-.zone-volcano { background:linear-gradient(180deg,#1a0808 0%,#3a1010 40%,#2a0808 60%,#100404 100%); }
-.zone-ice     { background:linear-gradient(180deg,#101828 0%,#1a2840 40%,#203050 60%,#101828 100%); }
-.zone-void    { background:linear-gradient(180deg,#05001a 0%,#100030 40%,#150040 60%,#050015 100%); }
-.zone-chaos   { background:linear-gradient(180deg,#1a0030 0%,#300060 40%,#200050 60%,#100020 100%); }
-
-/* Stars in void/chaos zones */
-.zone-void::after, .zone-chaos::after {
-  content:'';
-  position:absolute;
-  inset:0;
-  background-image:
-    radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,.8) 0%, transparent 100%),
-    radial-gradient(1px 1px at 30% 60%, rgba(255,255,255,.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 50% 30%, rgba(255,255,255,.9) 0%, transparent 100%),
-    radial-gradient(1px 1px at 70% 70%, rgba(255,255,255,.7) 0%, transparent 100%),
-    radial-gradient(1px 1px at 85% 40%, rgba(255,255,255,.8) 0%, transparent 100%),
-    radial-gradient(1px 1px at 20% 80%, rgba(200,150,255,.6) 0%, transparent 100%),
-    radial-gradient(1px 1px at 60% 15%, rgba(150,200,255,.7) 0%, transparent 100%),
-    radial-gradient(2px 2px at 40% 50%, rgba(255,200,100,.5) 0%, transparent 100%);
-}
-
-/* Ground line */
-#scene-ground {
-  position:absolute;
-  bottom:20px;
-  left:0;right:0;
-  height:3px;
-  background:rgba(255,255,255,.1);
-}
-#scene-ground::before {
-  content:'';
-  position:absolute;
-  bottom:0;left:0;right:0;height:20px;
-  background:rgba(0,0,0,.3);
-}
-
-/* ── PIXEL SPRITES ── */
-.sprite {
-  position:absolute;
-  width:1px;
-  height:1px;
-  image-rendering:pixelated;
-}
-
-#sprite-player {
-  left:30px;
-  bottom:22px;
-  animation:player-idle 0.6s steps(1) infinite;
-}
-#sprite-player.attacking {
-  animation:player-attack 0.2s steps(1) 2;
-}
-
-#sprite-enemy {
-  right:30px;
-  bottom:22px;
-  animation:enemy-idle 0.8s steps(1) infinite;
-}
-#sprite-enemy.hurt {
-  animation:enemy-hurt 0.15s steps(1) 2;
-}
-
-#sprite-boss {
-  right:20px;
-  bottom:22px;
-  animation:boss-idle 1.2s steps(1) infinite;
-}
-
-/* Idle bob animations */
-@keyframes player-idle {
-  0%,100% { transform:translateY(0); }
-  50%      { transform:translateY(-3px); }
-}
-@keyframes enemy-idle {
-  0%,100% { transform:translateY(0) scaleX(1); }
-  50%     { transform:translateY(-2px) scaleX(1); }
-}
-@keyframes boss-idle {
-  0%,100% { transform:translateY(0) scale(1); }
-  50%     { transform:translateY(-4px) scale(1.02); }
-}
-
-/* Attack animation */
-@keyframes player-attack {
-  0%   { transform:translateX(0); }
-  50%  { transform:translateX(20px); }
-  100% { transform:translateX(0); }
-}
-
-/* Hurt flash */
-@keyframes enemy-hurt {
-  0%   { filter:none; transform:translateX(0); }
-  25%  { filter:brightness(4) saturate(0) hue-rotate(180deg); transform:translateX(8px); }
-  75%  { filter:brightness(3) saturate(0); transform:translateX(-4px); }
-  100% { filter:none; transform:translateX(0); }
-}
-
-/* Hit effect */
-.hit-effect {
-  position:absolute;
-  pointer-events:none;
-  animation:hit-pop .3s ease forwards;
-}
-@keyframes hit-pop {
-  0%   { opacity:1; transform:scale(0.5); }
-  50%  { opacity:1; transform:scale(1.5); }
-  100% { opacity:0; transform:scale(2); }
-}
-
-/* Boss phase glow */
-#sprite-boss.phase1 { filter:drop-shadow(0 0 4px #ff4400); }
-#sprite-boss.phase2 { filter:drop-shadow(0 0 8px #ff2200); animation-duration:.6s; }
-#sprite-boss.phase3 { filter:drop-shadow(0 0 12px #ff0000); animation-duration:.3s; }
-
-/* HP bars above sprites */
-.sprite-hp-bar {
-  position:absolute;
-  bottom:-8px;
-  left:50%;
-  transform:translateX(-50%);
-  width:50px;
-  height:4px;
-  background:rgba(0,0,0,.5);
-  border-radius:2px;
-  overflow:hidden;
-}
-.sprite-hp-fill {
-  height:100%;
-  background:linear-gradient(90deg,#d4522a,#f07040);
-  transition:width .1s;
-  border-radius:2px;
-}
-.sprite-hp-fill.boss { background:linear-gradient(90deg,#800000,#cc0000,#ff4400); }
-
-/* ── PIXEL FONT EFFECT ── */
-.pixel-num {
-  font-family:'JetBrains Mono',monospace;
-  font-size:.9rem;
-  letter-spacing:.05em;
-  image-rendering:pixelated;
-}
-
-/* ── ZONE PIXEL DECORATIONS ── */
-.zone-deco {
-  position:absolute;
-  bottom:22px;
-  opacity:0.6;
-  font-size:12px;
-  line-height:1;
-}
-#deco-left  { left:80px; }
-#deco-right { right:80px; }
-
-/* Volcano lava glow */
-.zone-volcano #scene-ground::before {
-  background:linear-gradient(180deg, rgba(255,100,0,.15) 0%, rgba(0,0,0,.3) 100%);
-}
-.zone-volcano #scene-bg::after {
-  content:'';
-  position:absolute;
-  bottom:0;left:0;right:0;height:30px;
-  background:linear-gradient(180deg, transparent, rgba(255,80,0,.2));
-  animation:lava-pulse 2s ease infinite;
-}
-@keyframes lava-pulse {
-  0%,100% { opacity:.5; }
-  50%     { opacity:1; }
-}
-
-/* Ice sparkles */
-.zone-ice #scene-bg::after {
-  content:'';
-  position:absolute;
-  inset:0;
-  background-image:
-    radial-gradient(1px 1px at 15% 30%, rgba(255,255,255,.9) 0%, transparent 100%),
-    radial-gradient(1px 1px at 45% 60%, rgba(200,240,255,.8) 0%, transparent 100%),
-    radial-gradient(1px 1px at 75% 25%, rgba(255,255,255,.9) 0%, transparent 100%),
-    radial-gradient(1px 1px at 55% 80%, rgba(200,240,255,.7) 0%, transparent 100%);
-  animation:ice-twinkle 3s ease infinite;
-}
-@keyframes ice-twinkle {
-  0%,100% { opacity:.5; }
-  50%     { opacity:1; }
-}
-
-/* ── ATTACK SLASH EFFECT ── */
-#attack-slash {
-  position:absolute;
-  bottom:30px;
-  left:50%;
-  transform:translateX(-50%);
-  width:60px;
-  height:40px;
-  pointer-events:none;
-  opacity:0;
-}
-#attack-slash.show {
-  animation:slash-anim .2s ease forwards;
-}
-@keyframes slash-anim {
-  0%   { opacity:1; transform:translateX(-50%) rotate(-45deg) scale(.5); }
-  50%  { opacity:1; transform:translateX(-50%) rotate(-30deg) scale(1.2); }
-  100% { opacity:0; transform:translateX(-50%) rotate(-20deg) scale(1.5); }
-}
