@@ -1163,10 +1163,16 @@ function renderTeam() {
 
   // Active synergies
   const badge=$('team-synergy-badge');
-  if(badge&&typeof TEAM_SYNERGIES!=='undefined'){
+  if(badge){
     const active=units.filter(u=>u.unlocked);
-    const syns=TEAM_SYNERGIES.filter(s=>s.req(active));
-    badge.textContent=syns.length?syns.map(s=>s.icon+' '+s.name).join(' · '):'无协同效果';
+    const roleStr=active.map(u=>u.icon||(u.role==='atk'?'⚔':u.role==='spd'?'⚡':'🗡')).join('');
+    if(G._activeSynergies&&G._activeSynergies.length>0){
+      badge.textContent=roleStr+' · '+G._activeSynergies.join(' + ');
+      badge.style.color='var(--jade2)';
+    } else {
+      badge.textContent=roleStr+(active.length>1?' · 无协同':' · 单人');
+      badge.style.color='var(--tx3)';
+    }
   }
 
   // Synergy panel
@@ -1191,9 +1197,9 @@ function renderTeam() {
   // Unit cards
   if(typeof UNIT_ROLES!=='undefined'){
     UNIT_ROLES.forEach(role=>{
-      const unit=units.find(u=>u.roleId===role.id);
+      const unit=units.find(u=>u.roleId===role.id||u.role===role.role);
       const unlocked=unit&&unit.unlocked;
-      const req=UNIT_UNLOCK_REQS&&UNIT_UNLOCK_REQS[role.id];
+      const req=UNIT_UNLOCK_REQS&&(UNIT_UNLOCK_REQS[role.id]||UNIT_UNLOCK_REQS[role.role]);
       const card=document.createElement('div');
       card.className='panel';
       card.style.opacity=unlocked?'1':'0.6';

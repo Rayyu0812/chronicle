@@ -304,7 +304,7 @@ function loadGame() {
     if(G.unit2Unlocked===undefined) G.unit2Unlocked=false;
     try {
       if(!G.units||!Array.isArray(G.units)||!G.units.length){
-        const warrior=makeUnit('warrior','战士'); warrior.gear=makeInitialGear(); warrior.unlocked=true;
+        const warrior=makeUnit('atk','战士'); warrior.gear=makeInitialGear(); warrior.unlocked=true; warrior.isMainChar=true;
         G.units=[warrior];
       }
       // Ensure units have required fields
@@ -863,7 +863,7 @@ function initGear() {
     if(!G.gear) G.gear = makeInitialGear();
     // Init team
     if(!G.units||!G.units.length){
-      const warrior = makeUnit('warrior','战士');
+      const warrior = makeUnit('atk','战士');
       warrior.gear = makeInitialGear();
       G.units = [warrior];
     }
@@ -1077,12 +1077,27 @@ function recomputeGearStats(g) {
 function calcTeamSynergies() {
   try {
     if(!G.units||!G.units.length) return;
-    G.teamAtkMult=1; G.teamCdmgBonus=0; G.teamTruePct=0; G.teamAllMult=1; G.teamDoubleHit=0;
+    G.teamAtkMult=1; G.teamCdmgBonus=0; G.teamTruePct=0;
+    G.teamAllMult=1; G.teamDoubleHit=0; G.teamSpdMult=1;
     const active=G.units.filter(u=>u.unlocked);
+    // Ensure all units have role field
+    active.forEach(u=>{
+      if(!u.role){
+        const r=typeof resolveRole==='function'?resolveRole(u.roleId):null;
+        if(r) u.role=r.role||r.id;
+      }
+    });
     if(typeof TEAM_SYNERGIES==='undefined') return;
     TEAM_SYNERGIES.forEach(syn=>{
       try{ if(syn.req(active)) syn.apply(); }catch(e){}
     });
+    // Log active synergies
+    const active_syns=TEAM_SYNERGIES.filter(s=>{ try{ return s.req(active); }catch(e){ return false; } });
+    if(active_syns.length>0&&active.length>1){
+      G._activeSynergies=active_syns.map(s=>s.name);
+    } else {
+      G._activeSynergies=[];
+    }
   } catch(e) { console.warn('synergy error:',e); }
 }
 
@@ -1286,7 +1301,10 @@ function checkMilestone(stage) {
 
 // ── ACHIEVEMENTS ─────────────────────────────────────────────
 function tryUnlockUnit(roleId) {
-  const req = UNIT_UNLOCK_REQS&&UNIT_UNLOCK_REQS[roleId];
+  // Resolve role id (spd/crit/atk)
+  const role = typeof resolveRole==='function' ? resolveRole(roleId) : null;
+  const canonId = role ? role.id : roleId;
+  const req = UNIT_UNLOCK_REQS&&(UNIT_UNLOCK_REQS[canonId]||UNIT_UNLOCK_REQS[roleId]);
   if(!req) return;
   if(G.best<req.stage||G.gold<req.gold){ notif('解锁条件：'+req.desc); return; }
   const exists = G.units.some(u=>u.roleId===roleId);
@@ -1477,42 +1495,61 @@ function unitCritDmg(unit) {
   return c;
 }
 
-// ── ALLIED UNIT DAMAGE CALCULATION ───────────────────
-// Separate from main calcDmg - simpler, role-specific
-function calcUnitDmg(unit, role) {
+// ── UNIT DAMAGE (per spec: uses unit.baseAtk/critChance/critDmg) ──
+function calcUnitDmg(unit) {
   try {
-    let dmg = unitAtk(unit);
-    const critRate = unitCrit(unit);
-    const isCrit = Math.random()*100 < critRate;
-    if(isCrit) dmg = Math.floor(dmg * (unitCritDmg(unit)/100));
+    if(!unit) return { dmg:1, isCrit:false };
 
-    // Role-specific bonuses
+    // Scale with main character power (units are % of main char)
+    const role = typeof resolveRole==='function' ? resolveRole(unit.roleId) : null;
+    const atkScale = role ? role.baseAtk : 1.0;
+    const mainAtk = totalAtk();
+
+    // Unit ATK = main ATK × role scale + unit's own gear
+    let dmg = Math.floor(mainAtk * atkScale * (0.9 + Math.random()*0.2));
+
+    // Crit
+    const critRate = unit.critChance || 5;
+    const isCrit = Math.random()*100 < critRate;
+    if(isCrit) dmg = Math.floor(dmg * ((unit.critDmg||200)/100));
+
+    // ── Role mechanics ──
     if(role){
-      if(role.id==='warrior'){
-        // Every 5 hits = 3x burst
-        unit.hitCount=(unit.hitCount||0);
-        if(unit.hitCount>=4){ dmg=Math.floor(dmg*3); unit.hitCount=0; }
-        else unit.hitCount++;
+      // ATK role: burst every N hits
+      if(role.role==='atk'){
+        unit.hitCount=(unit.hitCount||0)+1;
+        if(unit.hitCount>=(role.burstEvery||5)){
+          dmg=Math.floor(dmg*(role.burstMult||3));
+          unit.hitCount=0;
+        }
       }
-      if(role.id==='assassin'){
-        // Each combo = +5% dmg, stacks
-        const combo=unit.combo||0;
-        dmg=Math.floor(dmg*(1+combo*0.05));
+      // SPD role: each hit stacks +0.8% dmg
+      if(role.role==='spd'){
+        unit.spdStack=(unit.spdStack||0)+1;
+        const bonus=Math.min(unit.spdStack,200)*(role.stackBonus||0.008);
+        dmg=Math.floor(dmg*(1+bonus));
       }
-      if(role.id==='mage'){
-        // True damage: 3% of enemy max HP
-        const trueDmg=Math.floor(G.enemyMax*0.03);
-        dmg+=trueDmg;
+      // CRIT role: consecutive crits chain +20% each
+      if(role.role==='crit'){
+        if(isCrit){
+          unit.critChain=(unit.critChain||0)+1;
+          const chainBonus=unit.critChain*(role.chainBonus||0.20);
+          dmg=Math.floor(dmg*(1+chainBonus));
+        } else {
+          unit.critChain=0;
+        }
       }
     }
 
-    // Team synergy bonus
-    if(G.teamAtkMult&&G.teamAtkMult>1) dmg=Math.floor(dmg*G.teamAtkMult);
+    // Team synergy bonuses
+    if(G.teamAtkMult&&G.teamAtkMult>1)    dmg=Math.floor(dmg*G.teamAtkMult);
+    if(G.teamAllMult&&G.teamAllMult>1)    dmg=Math.floor(dmg*G.teamAllMult);
+    if(G.teamCdmgBonus&&isCrit)           dmg=Math.floor(dmg*(1+G.teamCdmgBonus/100));
 
     return { dmg:Math.max(1,dmg), isCrit };
   } catch(e) {
     console.error('calcUnitDmg error:', e);
-    return { dmg:1, isCrit:false };
+    return { dmg:Math.max(1,Math.floor(totalAtk()*0.5)), isCrit:false };
   }
 }
 
@@ -1867,32 +1904,35 @@ function runTimers() {
   }, 1000/G.speed);
 
   // ── ALLIED UNIT ATTACK INTERVALS ──────────────────────
-  // Each unlocked unit beyond the main character gets its OWN attack loop
-  // at its own speed, contributing real damage independently
+  // Each unlocked allied unit (index > 0) gets its OWN setInterval
+  // based on its own atkSpd — truly independent attack timing
   const alliedUnits = (G.units||[]).filter((u,i)=>u.unlocked && i>0);
-  alliedUnits.forEach((unit, idx)=>{
-    const role = typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
-    // Allied unit speed = main SPD * role.baseSpd
-    const uSpd = Math.max(0.5, totalSpd() * (role ? role.baseSpd : 0.9));
+  alliedUnits.forEach((unit)=>{
+    const role = typeof resolveRole==='function' ? resolveRole(unit.roleId) : null;
+    // Unit speed = main char speed × role multiplier
+    const spdMult = (role ? role.baseSpd : 1.0) * (G.teamSpdMult||1);
+    const uSpd = Math.max(0.3, totalSpd() * spdMult);
     const uMs = (1000/uSpd)/G.speed;
     const uI = setInterval(()=>{
       try{
         if(G._timerGen!==_gen){ clearInterval(uI); return; }
         if(G.enemyHP<=0) return;
-        // Unit attack
-        const result = calcUnitDmg(unit, role);
-        if(!result) return;
-        const { dmg, isCrit } = result;
+        // Calculate damage
+        const { dmg, isCrit } = calcUnitDmg(unit);
+        // Apply to enemy
         G.enemyHP = Math.max(0, G.enemyHP - dmg);
         G.totalDmgFight += dmg; G.totalDmg += dmg; G.dpsAccum += dmg;
+        // Check win
         if(G.enemyHP<=0){ onWin(); return; }
-        // Visual
+        // Combat log - show which unit attacked
         spawnDmg(dmg, isCrit, false);
-        if(G.speed<=3) log(role.icon+' '+unit.name+' -'+fmt(dmg)+(isCrit?'💥':''),'ev');
-        // Unit-specific mechanics
-        if(unit.roleId==='assassin'){ unit.combo=(unit.combo||0)+1; }
-        else if(unit.roleId==='warrior'){ unit.hitCount=(unit.hitCount||0)+1; }
-      }catch(e){ console.error('unit interval error:',e); }
+        if(G.speed<=3){
+          const icon = unit.icon || (role?role.icon:'👤');
+          const tag = '['+unit.name+']';
+          if(isCrit) log(icon+' '+tag+' 暴击 '+fmt(dmg)+' 💥','ev');
+          else        log(icon+' '+tag+' 攻击 '+fmt(dmg),'ev');
+        }
+      }catch(e){ console.error('unit['+unit.roleId+'] error:',e); }
     }, uMs);
     unitI.push(uI);
   });
@@ -2089,6 +2129,15 @@ function onWin() {
   if(typeof updatePersonalBests==='function') updatePersonalBests();
   if(typeof showGachaTabIfUnlocked==='function') showGachaTabIfUnlocked();
   if(typeof showDungeonTabIfUnlocked==='function') showDungeonTabIfUnlocked();
+  // Auto-notify unit unlocks at stage thresholds
+  if(G.best===50&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.spd){
+    log('🎉 Stage 50达成！疾风可以解锁了！去队伍页面查看','boss');
+    notif('⚡ 疾风可以解锁！队伍→解锁','#60d4a0');
+  }
+  if(G.best===120&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.crit){
+    log('🎉 Stage 120达成！刺客可以解锁了！','boss');
+    notif('🗡 刺客可以解锁！队伍→解锁','#c9a84c');
+  }
   updateTaskProgress('wins',1);
   updateTaskProgress('bossKills', G.isBoss?1:0);
   updateTaskProgress('stage', G.stage);
@@ -2241,6 +2290,15 @@ function initGame() {
     startFight(); runTimers(); checkAchs();
     if(typeof showGachaTabIfUnlocked==='function') showGachaTabIfUnlocked();
   if(typeof showDungeonTabIfUnlocked==='function') showDungeonTabIfUnlocked();
+  // Auto-notify unit unlocks at stage thresholds
+  if(G.best===50&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.spd){
+    log('🎉 Stage 50达成！疾风可以解锁了！去队伍页面查看','boss');
+    notif('⚡ 疾风可以解锁！队伍→解锁','#60d4a0');
+  }
+  if(G.best===120&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.crit){
+    log('🎉 Stage 120达成！刺客可以解锁了！','boss');
+    notif('🗡 刺客可以解锁！队伍→解锁','#c9a84c');
+  }
   } catch(e) {
     console.error('initGame crash:', e);
     // Log error but NEVER auto-reset - let player decide

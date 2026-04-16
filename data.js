@@ -1440,101 +1440,102 @@ function updatePersonalBests() {
 // ═══════════════════════════════════════════════════════
 
 // ── UNIT ROLES ────────────────────────────────────────
+// ── UNIT ROLES (3 types: atk / spd / crit) ────────────
 const UNIT_ROLES = [
   {
-    id:'warrior',  name:'战士',   icon:'⚔',  color:'#d4522a',
-    desc:'高ATK，低SPD，每5击爆发攻击',
-    baseAtk:1.5, baseSpd:0.8, baseCrit:1.0, baseCdmg:1.0,
+    id:'atk',  name:'战士', icon:'⚔', color:'#d4522a',
+    role:'atk',
+    desc:'高ATK · 每5击爆发×3',
+    baseAtk:1.6, baseSpd:0.85, baseCrit:1.0, baseCdmg:1.0,
+    burstEvery:5, burstMult:3,
     passive:'每5击造成300%伤害',
-    spec_bonus:{ atk:'Train ATK×2', crit:'CritDmg+50%', spd:'SPD上限+2' }
   },
   {
-    id:'assassin', name:'刺客',   icon:'🗡',  color:'#c9a84c',
-    desc:'高Crit，高SPD，连击叠加伤害',
-    baseAtk:0.9, baseSpd:1.3, baseCrit:2.0, baseCdmg:1.5,
-    passive:'每连击+5%伤害（无上限）',
-    spec_bonus:{ atk:'ATK+30%', crit:'CritDmg×2', spd:'每击SPD+0.01' }
+    id:'spd',  name:'疾风', icon:'⚡', color:'#60d4a0',
+    role:'spd',
+    desc:'高速 · 每击叠层伤害',
+    baseAtk:0.8, baseSpd:1.6, baseCrit:1.0, baseCdmg:1.0,
+    stackBonus:0.008, // +0.8% per hit, resets each stage
+    passive:'每击+0.8%伤害，速通关卡',
   },
   {
-    id:'mage',     name:'法师',   icon:'🔮',  color:'#8b5cf6',
-    desc:'真伤，无视敌人HP比例伤害',
-    baseAtk:0.7, baseSpd:0.7, baseCrit:1.2, baseCdmg:2.0,
-    passive:'每击造成敌人最大HP 3%真伤',
-    spec_bonus:{ atk:'真伤+2%', crit:'真伤触发率+50%', spd:'SPD每1.0=真伤+0.5%' }
-  },
-  {
-    id:'tank',     name:'坦克',   icon:'🛡',  color:'#4a9fd4',
-    desc:'为队友提供ATK加成，自身耐久',
-    baseAtk:0.5, baseSpd:0.6, baseCrit:0.5, baseCdmg:1.0,
-    passive:'每次失败不退关，为队友ATK+10%',
-    spec_bonus:{ atk:'队友ATK+30%', crit:'队友Crit+15%', spd:'不退关概率+30%' }
+    id:'crit', name:'刺客', icon:'🗡', color:'#c9a84c',
+    role:'crit',
+    desc:'高暴击 · 连续暴击爆炸伤害',
+    baseAtk:0.9, baseSpd:1.1, baseCrit:2.5, baseCdmg:2.0,
+    chainBonus:0.2, // +20% per consecutive crit
+    passive:'连续暴击链 每链+20%伤害',
   },
 ];
 
+// Backward compat aliases
+const ROLE_ALIAS = { warrior:'atk', assassin:'crit', mage:'atk', tank:'spd' };
+function resolveRole(roleId) {
+  return UNIT_ROLES.find(r=>r.id===roleId) ||
+         UNIT_ROLES.find(r=>r.id===ROLE_ALIAS[roleId]) ||
+         UNIT_ROLES[0];
+}
+
 // ── UNIT TEMPLATE ─────────────────────────────────────
 function makeUnit(roleId, name) {
-  const role = UNIT_ROLES.find(r=>r.id===roleId) || UNIT_ROLES[0];
+  const role = resolveRole(roleId);
+  const resolvedId = role.id; // use canonical id
   return {
-    id: roleId+'_'+Date.now(),
-    roleId,
+    id: resolvedId+'_'+Date.now(),
+    roleId: resolvedId,
+    role: role.role || resolvedId, // 'atk' / 'spd' / 'crit'
     name: name || role.name,
-    level: 1,
-    unlocked: roleId==='warrior', // only warrior starts unlocked
-    // Base stats (multiplied by role multipliers)
+    icon: role.icon,
+    unlocked: resolvedId==='atk', // only atk warrior starts unlocked
+    // Stats - scale with main character
     baseAtk: Math.floor(10 * role.baseAtk),
     atkSpd:  +(1.0 * role.baseSpd).toFixed(2),
     critChance: 5 * role.baseCrit,
     critDmg: 200 * role.baseCdmg,
-    // Gear — each unit has own 4 slots
-    gear: null, // initialized separately
-    // Skills
-    skills: [],
-    spec: null,
     // Combat state
-    combo: 0,
-    hitCount: 0,
+    hitCount: 0,   // for burst (atk)
+    spdStack: 0,   // for stack (spd)
+    critChain: 0,  // for chain (crit)
+    // Gear slot (simplified - not full main char system)
+    gear: null,
+    isMainChar: false,
   };
 }
 
 // ── TEAM SYNERGIES (Phase F) ───────────────────────────
+// ── TEAM SYNERGIES (role-based, simple) ───────────────
 const TEAM_SYNERGIES = [
   {
-    id:'double_warrior', name:'钢铁意志',   icon:'⚔⚔',
+    id:'double_atk', name:'钢铁意志', icon:'⚔⚔',
     desc:'2×战士：全队ATK+40%',
-    req:(team)=>team.filter(u=>u.roleId==='warrior').length>=2,
+    req:(team)=>team.filter(u=>u.role==='atk').length>=2,
     apply:()=>{ G.teamAtkMult=(G.teamAtkMult||1)*1.40; }
   },
   {
-    id:'warrior_assassin', name:'斩杀协定', icon:'⚔🗡',
-    desc:'战士+刺客：暴击伤害+100%',
-    req:(team)=>team.some(u=>u.roleId==='warrior')&&team.some(u=>u.roleId==='assassin'),
+    id:'double_spd', name:'疾风连击', icon:'⚡⚡',
+    desc:'2×疾风：全队攻速+50%',
+    req:(team)=>team.filter(u=>u.role==='spd').length>=2,
+    apply:()=>{ G.teamSpdMult=(G.teamSpdMult||1)*1.50; }
+  },
+  {
+    id:'double_crit', name:'暴击风暴', icon:'🗡🗡',
+    desc:'2×刺客：全队CritDmg+100%',
+    req:(team)=>team.filter(u=>u.role==='crit').length>=2,
     apply:()=>{ G.teamCdmgBonus=(G.teamCdmgBonus||0)+100; }
   },
   {
-    id:'mage_support', name:'魔法护盾',    icon:'🔮🛡',
-    desc:'法师+坦克：真伤+3%，不退关+50%',
-    req:(team)=>team.some(u=>u.roleId==='mage')&&team.some(u=>u.roleId==='tank'),
-    apply:()=>{ G.teamTruePct=(G.teamTruePct||0)+0.03; G.pb.noRetro=(G.pb.noRetro||0)+0.50; }
-  },
-  {
-    id:'full_team', name:'无敌军团',       icon:'⚔🗡🔮🛡',
-    desc:'4种职业全齐：所有属性×2',
-    req:(team)=>['warrior','assassin','mage','tank'].every(r=>team.some(u=>u.roleId===r)),
-    apply:()=>{ G.teamAllMult=(G.teamAllMult||1)*2.0; }
-  },
-  {
-    id:'triple_dps', name:'三重打击',      icon:'⚔⚔⚔',
-    desc:'3个DPS角色：每击有20%额外一击',
-    req:(team)=>team.filter(u=>['warrior','assassin','mage'].includes(u.roleId)).length>=3,
-    apply:()=>{ G.teamDoubleHit=(G.teamDoubleHit||0)+0.20; }
+    id:'all_roles', name:'均衡之道', icon:'⚔⚡🗡',
+    desc:'三种职业各一：全属性+25%',
+    req:(team)=>['atk','spd','crit'].every(r=>team.some(u=>u.role===r)),
+    apply:()=>{ G.teamAllMult=(G.teamAllMult||1)*1.25; }
   },
 ];
 
 // ── UNIT UNLOCK REQUIREMENTS ──────────────────────────
+// Stage 50 → 2nd unit (spd), Stage 120 → 3rd unit (crit)
 const UNIT_UNLOCK_REQS = {
-  assassin: { stage:50,  gold:10000,  desc:'到达Stage 50 + 10000金' },
-  mage:     { stage:100, gold:50000,  desc:'到达Stage 100 + 50000金' },
-  tank:     { stage:200, gold:200000, desc:'到达Stage 200 + 200000金' },
+  spd:  { stage:50,  gold:5000,   desc:'到达Stage 50 · 解锁疾风' },
+  crit: { stage:120, gold:30000,  desc:'到达Stage 120 · 解锁刺客' },
 };
 
 // ═══════════════════════════════════════════════════════
