@@ -58,6 +58,7 @@ function newGame() {
     lastSeen: Date.now(),
     crits:0, goldEarned:0, itemsGot:0,
     speed:1, autoTrain:false, autoRest:false,
+    _timerGen:0,
     // Gacha (Phase E)
     gachaCrystals:0, gachaPulls:0, gachaPity:0,
     // Rune system
@@ -1570,7 +1571,16 @@ function calcDmg() {
   return { dmg, isCrit, special:tMult>1 };
 }
 
-function stopTimers() { clearInterval(atkI); clearInterval(tmrI); clearInterval(dpsI); clearInterval(berserkI); }
+function stopTimers() {
+  clearInterval(atkI);  atkI=null;
+  clearInterval(tmrI);  tmrI=null;
+  clearInterval(dpsI);  dpsI=null;
+  clearInterval(berserkI); berserkI=null;
+  // Also clear challenge interval
+  if(typeof challengeInterval!=='undefined'&&challengeInterval){
+    clearInterval(challengeInterval); challengeInterval=null;
+  }
+}
 
 function startFight() {
   G.fights++;
@@ -1633,11 +1643,14 @@ function startFight() {
 function restartCombat() { stopTimers(); startFight(); runTimers(); }
 
 function runTimers() {
+  // Guard: stop any existing timers first (prevents double-running)
+  if(atkI||tmrI||dpsI) { stopTimers(); }
   // Multi-unit attack rotation
   const activeUnits = G.units?G.units.filter(u=>u.unlocked):[];
   const unitCount = Math.max(1, activeUnits.length);
   const atkMs=(1000/totalSpd())/G.speed;
   atkI=setInterval(()=>{
+    if(G._timerGen!==_gen){ clearInterval(atkI); return; }
     if(G.enemyHP<=0) return;
     // Cycle through units
     G.activeUnit = (G.activeUnit||0) % unitCount;
@@ -1776,7 +1789,9 @@ function runTimers() {
 
   // Timer
   const tms=1000/G.speed;
+  const _gen=++G._timerGen; // generation counter - if changed, this timer is stale
   tmrI=setInterval(()=>{
+    if(G._timerGen!==_gen){ clearInterval(tmrI); return; } // stale timer, self-destruct
     G.timeEl++; updateCombatUI();
     // Time erode talent
     if(T.id==='time_erode'&&T.tickPct){
