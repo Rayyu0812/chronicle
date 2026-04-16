@@ -1208,6 +1208,20 @@ function renderTeam() {
           req?'<div style="font-size:.52rem;color:var(--tx3)">'+req.desc+'</div>':'')+'</div>';
       card.innerHTML=headerHTML;
       if(unlocked&&unit){
+        // IN BATTLE badge
+        const battleBadge=document.createElement('div');
+        battleBadge.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:8px;';
+        const bb=document.createElement('div');
+        bb.style.cssText='font-size:.52rem;padding:2px 8px;background:rgba(58,158,110,.15);border:1px solid var(--jade);border-radius:4px;color:var(--jade2);letter-spacing:.05em;';
+        bb.textContent='⚔ 战斗中';
+        battleBadge.appendChild(bb);
+        if(unit.isMainChar){
+          const mc=document.createElement('div');
+          mc.style.cssText='font-size:.52rem;padding:2px 8px;background:rgba(201,168,76,.1);border:1px solid var(--gold);border-radius:4px;color:var(--gold2);';
+          mc.textContent='★ 主角';
+          battleBadge.appendChild(mc);
+        }
+        card.appendChild(battleBadge);
         // Stats
         const statsDiv=document.createElement('div');
         statsDiv.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:.58rem;margin-bottom:8px;';

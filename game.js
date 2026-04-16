@@ -1295,6 +1295,7 @@ function tryUnlockUnit(roleId) {
   const unit = makeUnit(roleId);
   unit.gear = makeInitialGear();
   unit.unlocked = true;
+  unit.isMainChar = false;
   G.units.push(unit);
   calcTeamSynergies();
   updateStats(); saveGame();
@@ -1427,6 +1428,7 @@ function gainExp(amt) {
 
 // ── COMBAT ────────────────────────────────────────────────────
 let atkI=null, tmrI=null, dpsI=null, berserkI=null;
+let unitI=[]; // one interval per allied unit
 G._berserkActive=false;
 
 function unitAtk(unit) {
@@ -1475,14 +1477,49 @@ function unitCritDmg(unit) {
   return c;
 }
 
+// ── ALLIED UNIT DAMAGE CALCULATION ───────────────────
+// Separate from main calcDmg - simpler, role-specific
+function calcUnitDmg(unit, role) {
+  try {
+    let dmg = unitAtk(unit);
+    const critRate = unitCrit(unit);
+    const isCrit = Math.random()*100 < critRate;
+    if(isCrit) dmg = Math.floor(dmg * (unitCritDmg(unit)/100));
+
+    // Role-specific bonuses
+    if(role){
+      if(role.id==='warrior'){
+        // Every 5 hits = 3x burst
+        unit.hitCount=(unit.hitCount||0);
+        if(unit.hitCount>=4){ dmg=Math.floor(dmg*3); unit.hitCount=0; }
+        else unit.hitCount++;
+      }
+      if(role.id==='assassin'){
+        // Each combo = +5% dmg, stacks
+        const combo=unit.combo||0;
+        dmg=Math.floor(dmg*(1+combo*0.05));
+      }
+      if(role.id==='mage'){
+        // True damage: 3% of enemy max HP
+        const trueDmg=Math.floor(G.enemyMax*0.03);
+        dmg+=trueDmg;
+      }
+    }
+
+    // Team synergy bonus
+    if(G.teamAtkMult&&G.teamAtkMult>1) dmg=Math.floor(dmg*G.teamAtkMult);
+
+    return { dmg:Math.max(1,dmg), isCrit };
+  } catch(e) {
+    console.error('calcUnitDmg error:', e);
+    return { dmg:1, isCrit:false };
+  }
+}
+
 function calcDmg() {
   try {
-  // Get current attacking unit
-  const activeUnits = G.units ? G.units.filter(u=>u.unlocked) : [];
-  const unit = activeUnits.length > 1 ? activeUnits[(G.activeUnit-1+activeUnits.length)%activeUnits.length] : null;
-  const role = unit && typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
-
-  let dmg = unit ? unitAtk(unit) : totalAtk();
+  // Main character damage (allied units use calcUnitDmg separately)
+  let dmg = totalAtk();
   const pct=G.enemyMax>0?G.enemyHP/G.enemyMax:1;
 
   // ── GEAR PATH IDENTITY ──
@@ -1533,27 +1570,7 @@ function calcDmg() {
 
   // Boss phase ATK multiplier
   if(G.isBoss&&G.bossAtkMult&&G.bossAtkMult>1) dmg=Math.floor(dmg*G.bossAtkMult);
-  // Role-specific passives
-  if(role){
-    if(role.id==='assassin'){
-      // Assassin: each combo = +5% dmg
-      dmg=Math.floor(dmg*(1+(unit.combo||0)*0.05));
-    }
-    if(role.id==='mage'){
-      // Mage: flat true damage per hit (3% of enemy max HP)
-      const mageTrueDmg=Math.floor(G.enemyMax*0.03*(1+(G.teamTruePct||0)));
-      dmg+=mageTrueDmg;
-    }
-    if(role.id==='tank'){
-      // Tank: boosts team ATK instead of dealing damage
-      G.teamAtkBoost=(G.teamAtkBoost||0)+1;
-    }
-    if(role.id==='warrior'){
-      // Warrior: burst every 5 hits
-      unit.hitCount=(unit.hitCount||0)+1;
-      if(unit.hitCount>=5){ unit.hitCount=0; dmg=Math.floor(dmg*3); }
-    }
-  }
+  // Role passives handled in calcUnitDmg for allied units
   // Executioner talent
   if(T.id==='executioner'&&T.dmgMult) dmg=Math.floor(dmg*T.dmgMult(pct));
   // Affix: thunder
@@ -1563,10 +1580,8 @@ function calcDmg() {
   }
   // Passive demolish
   if(G.pb.demolish&&Math.random()<G.pb.demolish) tMult=Math.max(tMult,3);
-  const critRate = unit ? unitCrit(unit) : totalCrit();
-  const critDmgRate = unit ? unitCritDmg(unit) : totalCritDmg();
-  const isCrit=Math.random()*100<critRate;
-  if(isCrit) dmg=Math.floor(dmg*(critDmgRate/100));
+  const isCrit=Math.random()*100<totalCrit();
+  if(isCrit) dmg=Math.floor(dmg*(totalCritDmg()/100));
   else dmg=Math.floor(dmg*(0.9+Math.random()*.2));
   dmg=Math.floor(dmg*tMult);
   // Mirror talent
@@ -1594,7 +1609,8 @@ function stopTimers() {
   clearInterval(tmrI);  tmrI=null;
   clearInterval(dpsI);  dpsI=null;
   clearInterval(berserkI); berserkI=null;
-  // Also clear challenge interval
+  // Clear all unit intervals
+  unitI.forEach(id=>clearInterval(id)); unitI=[];
   if(typeof challengeInterval!=='undefined'&&challengeInterval){
     clearInterval(challengeInterval); challengeInterval=null;
   }
@@ -1655,7 +1671,16 @@ function startFight() {
     G.currentZone=zone.name;
     sn.textContent=zone.icon+' Stage '+G.stage+(G.stage%25===0?' ⭐':'');
     badge.textContent='进攻中'; badge.className=''; hpbar.className='bar-fill';
-    if(G.speed<=3) log('━━ '+zone.icon+zone.name+' Stage '+G.stage+' HP:'+fmt(G.enemyMax)+' ━━','sys');
+    if(G.speed<=3){
+      log('━━ '+zone.icon+zone.name+' Stage '+G.stage+' HP:'+fmt(G.enemyMax)+' ━━','sys');
+      // Show team composition
+      const team=(G.units||[]).filter(u=>u.unlocked);
+      if(team.length>1){
+        const roles=typeof UNIT_ROLES!=='undefined'?UNIT_ROLES:[];
+        const teamStr=team.map(u=>{ const r=roles.find(x=>x.id===u.roleId); return r?r.icon+u.name:u.name; }).join(' · ');
+        log('👥 '+teamStr,'sys');
+      }
+    }
   }
 }
 
@@ -1670,18 +1695,13 @@ function runTimers() {
   stopTimers();
   // Generation counter - any timer that sees a different gen is stale and self-destructs
   const _gen = ++G._timerGen;
-  // Multi-unit attack rotation
-  const activeUnits = G.units?G.units.filter(u=>u.unlocked):[];
-  const unitCount = Math.max(1, activeUnits.length);
+  // Main character attack interval
   const atkMs=(1000/totalSpd())/G.speed;
   atkI=setInterval(()=>{
     try{
     if(G._timerGen!==_gen){ clearInterval(atkI); atkI=null; return; }
     if(G.enemyHP<=0) return;
-    // Cycle through units
-    G.activeUnit = (G.activeUnit||0) % unitCount;
-    const currentUnit = activeUnits[G.activeUnit] || null;
-    G.activeUnit++;
+    G._activeUnit = 0; // main character
     const { dmg:baseDmg, isCrit, special } = calcDmg();
     let totalHit=baseDmg;
 
@@ -1845,6 +1865,37 @@ function runTimers() {
       if(G.pb&&G.pb.goldPerSec){ G.gold+=Math.floor(G.stage*2+1); }
     }
   }, 1000/G.speed);
+
+  // ── ALLIED UNIT ATTACK INTERVALS ──────────────────────
+  // Each unlocked unit beyond the main character gets its OWN attack loop
+  // at its own speed, contributing real damage independently
+  const alliedUnits = (G.units||[]).filter((u,i)=>u.unlocked && i>0);
+  alliedUnits.forEach((unit, idx)=>{
+    const role = typeof UNIT_ROLES!=='undefined' ? UNIT_ROLES.find(r=>r.id===unit.roleId) : null;
+    // Allied unit speed = main SPD * role.baseSpd
+    const uSpd = Math.max(0.5, totalSpd() * (role ? role.baseSpd : 0.9));
+    const uMs = (1000/uSpd)/G.speed;
+    const uI = setInterval(()=>{
+      try{
+        if(G._timerGen!==_gen){ clearInterval(uI); return; }
+        if(G.enemyHP<=0) return;
+        // Unit attack
+        const result = calcUnitDmg(unit, role);
+        if(!result) return;
+        const { dmg, isCrit } = result;
+        G.enemyHP = Math.max(0, G.enemyHP - dmg);
+        G.totalDmgFight += dmg; G.totalDmg += dmg; G.dpsAccum += dmg;
+        if(G.enemyHP<=0){ onWin(); return; }
+        // Visual
+        spawnDmg(dmg, isCrit, false);
+        if(G.speed<=3) log(role.icon+' '+unit.name+' -'+fmt(dmg)+(isCrit?'💥':''),'ev');
+        // Unit-specific mechanics
+        if(unit.roleId==='assassin'){ unit.combo=(unit.combo||0)+1; }
+        else if(unit.roleId==='warrior'){ unit.hitCount=(unit.hitCount||0)+1; }
+      }catch(e){ console.error('unit interval error:',e); }
+    }, uMs);
+    unitI.push(uI);
+  });
 
   // Berserk rush skill
   if(hasSkill('berserk_rush')){
