@@ -456,6 +456,7 @@ function runDungeonStage() {
       if(hp > 0) {
         // Failed
         dungeonRunning = false;
+        dungeonData = null;
         log('❌ 副本失败 关卡'+dungeonStage, 'lose');
         notif('副本失败');
         restartCombat();
@@ -473,6 +474,7 @@ function runDungeonStage() {
 let challengeRunning = false;
 let challengeData = null;
 let challengeStage = 0;
+let challengeInterval = null; // track so we can properly clear it
 
 function startChallenge(challengeId) {
   const c = CHALLENGES.find(x=>x.id===challengeId);
@@ -502,15 +504,16 @@ function startChallengeRound() {
   let hp = enemyHp;
   let t = 0;
   const atkMs = (1000/spdOverride)/G.speed;
-  const cI = setInterval(()=>{
-    if(!challengeRunning){ clearInterval(cI); return; }
+  if(challengeInterval) clearInterval(challengeInterval);
+  challengeInterval = setInterval(()=>{
+    if(!challengeRunning){ clearInterval(challengeInterval); challengeInterval=null; return; }
     const isCrit = !noCrit && Math.random()*100 < totalCrit();
     let dmg = Math.floor(atkOverride * (isCrit ? totalCritDmg()/100 : 0.9+Math.random()*.2));
-    if(m.oneShot){ clearInterval(cI); if(dmg >= enemyHp){ winChallenge(); } else { loseChallenge(); } return; }
+    if(m.oneShot){ clearInterval(challengeInterval); challengeInterval=null; if(dmg >= enemyHp){ winChallenge(); } else { loseChallenge(); } return; }
     hp -= dmg; t++;
     spawnDmg(dmg, isCrit, false);
-    if(hp <= 0) { clearInterval(cI); winChallenge(); return; }
-    if(t*atkMs/1000 >= timeLimit){ clearInterval(cI); loseChallenge(); }
+    if(hp <= 0) { clearInterval(challengeInterval); challengeInterval=null; winChallenge(); return; }
+    if(t*atkMs/1000 >= timeLimit){ clearInterval(challengeInterval); challengeInterval=null; loseChallenge(); }
   }, atkMs);
 }
 
@@ -532,10 +535,13 @@ function winChallenge() {
 }
 
 function loseChallenge() {
+  if(challengeInterval){ clearInterval(challengeInterval); challengeInterval=null; }
   challengeRunning = false;
   const c = challengeData;
+  if(!c) { restartCombat(); return; }
   log('❌ 挑战结束！最高Stage：'+(G.challengesBest[c.id]||0), 'lose');
   notif('挑战结束 最高：Stage '+(G.challengesBest[c.id]||0));
+  challengeData = null;
   restartCombat();
 }
 
@@ -586,7 +592,9 @@ function startWeeklyBoss(wb) {
 }
 
 function stopChallenge() {
+  if(challengeInterval){ clearInterval(challengeInterval); challengeInterval=null; }
   challengeRunning = false;
+  challengeData = null;
   dungeonRunning = false;
   restartCombat();
 }
