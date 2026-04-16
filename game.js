@@ -1643,14 +1643,16 @@ function startFight() {
 function restartCombat() { stopTimers(); startFight(); runTimers(); }
 
 function runTimers() {
-  // Guard: stop any existing timers first (prevents double-running)
-  if(atkI||tmrI||dpsI) { stopTimers(); }
+  // Guard: stop any existing timers first
+  stopTimers();
+  // Generation counter - any timer that sees a different gen is stale and self-destructs
+  const _gen = ++G._timerGen;
   // Multi-unit attack rotation
   const activeUnits = G.units?G.units.filter(u=>u.unlocked):[];
   const unitCount = Math.max(1, activeUnits.length);
   const atkMs=(1000/totalSpd())/G.speed;
   atkI=setInterval(()=>{
-    if(G._timerGen!==_gen){ clearInterval(atkI); return; }
+    if(G._timerGen!==_gen){ clearInterval(atkI); atkI=null; return; }
     if(G.enemyHP<=0) return;
     // Cycle through units
     G.activeUnit = (G.activeUnit||0) % unitCount;
@@ -1789,9 +1791,8 @@ function runTimers() {
 
   // Timer
   const tms=1000/G.speed;
-  const _gen=++G._timerGen; // generation counter - if changed, this timer is stale
   tmrI=setInterval(()=>{
-    if(G._timerGen!==_gen){ clearInterval(tmrI); return; } // stale timer, self-destruct
+    if(G._timerGen!==_gen){ clearInterval(tmrI); tmrI=null; return; }
     G.timeEl++; updateCombatUI();
     // Time erode talent
     if(T.id==='time_erode'&&T.tickPct){
@@ -1808,12 +1809,12 @@ function runTimers() {
 
   // DPS
   dpsI=setInterval(()=>{
+    if(G._timerGen!==_gen){ clearInterval(dpsI); dpsI=null; return; }
     G.dpsTimer++;
     if(G.dpsTimer>=1){
       G.currentDPS=Math.floor(G.dpsAccum/G.dpsTimer);
       $('l-dps').textContent=fmt(G.currentDPS);
       $('l-dps-card')&&($('l-dps-card').textContent=fmt(G.currentDPS));
-      // Gold per sec passive
       if(G.pb&&G.pb.goldPerSec){ G.gold+=Math.floor(G.stage*2+1); }
     }
   }, 1000/G.speed);
@@ -1822,6 +1823,7 @@ function runTimers() {
   if(hasSkill('berserk_rush')){
     const berserkMs=15000/G.speed;
     berserkI=setInterval(()=>{
+      if(G._timerGen!==_gen){ clearInterval(berserkI); berserkI=null; return; }
       G._berserkActive=true;
       log('😤 狂暴冲刺激活！ATK×2持续3秒','skill');
       setTimeout(()=>{ G._berserkActive=false; }, 3000/G.speed);
