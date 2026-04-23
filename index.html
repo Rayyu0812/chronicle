@@ -1105,6 +1105,7 @@ function renderAchs() {
 // ── MODAL ────────────────────────────────────────────────────
 // ── GACHA RENDER ─────────────────────────────────────────────
 function renderGacha() {
+  try {
   $('gacha-crystals').textContent=G.gachaCrystals||0;
   $('gacha-pity-count').textContent=G.rosterPity||0;
   const list=$('gacha-list'); if(!list) return;
@@ -1174,8 +1175,15 @@ function renderGacha() {
   // How to earn crystals info
   const info=document.createElement('div');
   info.style.cssText='background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:.58rem;color:var(--tx3);line-height:1.7;';
-  info.innerHTML='<div style="color:var(--gold);margin-bottom:4px">💠 如何获得传说水晶</div>击败Boss获得水晶<br>每10关Boss额外奖励<br>购买月卡（即将推出）';
+  info.innerHTML='<div style="color:var(--gold);margin-bottom:4px">💠 如何获得传说水晶</div>击败Boss（稀缺）<br>每50关里程碑<br>完成成就';
   list.appendChild(info);
+  } catch(e) {
+    console.error('renderGacha error:', e);
+    const err=document.createElement('div');
+    err.style.cssText='padding:20px;color:#f07040;font-size:.6rem;text-align:center;';
+    err.textContent='加载失败: '+e.message;
+    const list2=$('gacha-list'); if(list2) list2.appendChild(err);
+  }
 }
 
 function pullAndShow(bannerId, multi) {
@@ -1261,9 +1269,9 @@ function renderMatSinks() {
 
 // ── TEAM / BOARD RENDER ──────────────────────────────
 function renderTeam() {
-  renderBoard();
-  renderRosterList();
-  renderSynBadges();
+  try { renderBoard(); } catch(e) { console.error('renderBoard error:', e); }
+  try { renderRosterList(); } catch(e) { console.error('renderRosterList error:', e); }
+  try { renderSynBadges(); } catch(e) { console.error('renderSynBadges error:', e); }
 }
 
 function renderBoard() {
@@ -1335,17 +1343,32 @@ function renderRosterList() {
     const ele=ELEMENTS[char.ele];
     const stars=getCharStars(char.id);
     const onBoard=(G.board||[]).includes(char.id);
+    const cl=typeof getCharLevel==='function'?getCharLevel(char.id):{lv:1};
+    const rarMult={1:1,2:1.5,3:2.5,4:5,5:10}[char.rar]||1;
+    const trainCostVal=Math.floor(100*cl.lv*rarMult);
+    const canTrain=G.gold>=trainCostVal&&cl.lv<100;
     const card=document.createElement('div');
-    card.style.cssText='border-radius:8px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+';padding:7px 5px;text-align:center;cursor:pointer;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.12)':'var(--s1)')+';transition:all .15s;position:relative;';
-    card.innerHTML=
+    card.style.cssText='border-radius:8px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+';padding:7px 5px;text-align:center;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.12)':'var(--s1)')+';transition:all .15s;position:relative;';
+    // Icon + name
+    const topDiv=document.createElement('div');
+    topDiv.style.cssText='cursor:pointer;';
+    topDiv.innerHTML=
       '<div style="font-size:1.2rem">'+char.icon+'</div>'+
       '<div style="font-size:.52rem;font-weight:700;color:'+rc.color+';margin-top:2px;line-height:1.2">'+char.name+'</div>'+
-      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+cls.name+' '+ele.icon+ele.name+'</div>'+
-      '<div style="font-size:.48rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>'+
-      (char.count>1?'<div style="position:absolute;top:3px;right:4px;font-size:.44rem;color:var(--tx3)">×'+char.count+'</div>':'')+
-      (onBoard?'<div style="font-size:.44rem;color:var(--jade2);margin-top:2px">出战中</div>':'');
-    card.onclick=()=>onBoard?removeCharFromBoard(char.id):addToBoard(char.id);
-    card.title=char.passive;
+      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
+      '<div style="font-size:.46rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>'+
+      '<div style="font-size:.5rem;color:var(--jade2);margin-top:2px">Lv.'+cl.lv+'</div>'+
+      (onBoard?'<div style="font-size:.42rem;color:var(--jade2)">出战中</div>':'<div style="font-size:.42rem;color:var(--tx3)">点击上阵</div>')+
+      (char.count>1?'<div style="position:absolute;top:3px;right:4px;font-size:.42rem;color:var(--tx3)">×'+char.count+'</div>':'');
+    topDiv.onclick=()=>onBoard?removeCharFromBoard(char.id):addToBoard(char.id);
+    topDiv.title=char.passive;
+    card.appendChild(topDiv);
+    // Train button
+    const trainBtn=document.createElement('button');
+    trainBtn.style.cssText='width:100%;margin-top:4px;padding:4px;border-radius:5px;border:1px solid '+(canTrain?'rgba(201,168,76,.5)':'var(--bd2)')+';background:'+(canTrain?'rgba(201,168,76,.08)':'rgba(50,50,70,.3)')+';color:'+(canTrain?'var(--gold2)':'var(--tx3)')+';font-size:.42rem;cursor:'+(canTrain?'pointer':'not-allowed')+';';
+    trainBtn.textContent=cl.lv>=100?'满级':'训练 '+fmt(trainCostVal)+'金';
+    trainBtn.onclick=(e)=>{ e.stopPropagation(); if(canTrain) trainChar(char.id); };
+    card.appendChild(trainBtn);
     list.appendChild(card);
   });
 }
@@ -1866,8 +1889,15 @@ window.addEventListener('load', ()=>{
   // How to earn crystals info
   const info=document.createElement('div');
   info.style.cssText='background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:.58rem;color:var(--tx3);line-height:1.7;';
-  info.innerHTML='<div style="color:var(--gold);margin-bottom:4px">💠 如何获得传说水晶</div>击败Boss获得水晶<br>每10关Boss额外奖励<br>购买月卡（即将推出）';
+  info.innerHTML='<div style="color:var(--gold);margin-bottom:4px">💠 如何获得传说水晶</div>击败Boss（稀缺）<br>每50关里程碑<br>完成成就';
   list.appendChild(info);
+  } catch(e) {
+    console.error('renderGacha error:', e);
+    const err=document.createElement('div');
+    err.style.cssText='padding:20px;color:#f07040;font-size:.6rem;text-align:center;';
+    err.textContent='加载失败: '+e.message;
+    const list2=$('gacha-list'); if(list2) list2.appendChild(err);
+  }
 }
 
 function pullAndShow(bannerId, multi) {
@@ -1953,9 +1983,9 @@ function renderMatSinks() {
 
 // ── TEAM / BOARD RENDER ──────────────────────────────
 function renderTeam() {
-  renderBoard();
-  renderRosterList();
-  renderSynBadges();
+  try { renderBoard(); } catch(e) { console.error('renderBoard error:', e); }
+  try { renderRosterList(); } catch(e) { console.error('renderRosterList error:', e); }
+  try { renderSynBadges(); } catch(e) { console.error('renderSynBadges error:', e); }
 }
 
 function renderBoard() {
@@ -2027,17 +2057,32 @@ function renderRosterList() {
     const ele=ELEMENTS[char.ele];
     const stars=getCharStars(char.id);
     const onBoard=(G.board||[]).includes(char.id);
+    const cl=typeof getCharLevel==='function'?getCharLevel(char.id):{lv:1};
+    const rarMult={1:1,2:1.5,3:2.5,4:5,5:10}[char.rar]||1;
+    const trainCostVal=Math.floor(100*cl.lv*rarMult);
+    const canTrain=G.gold>=trainCostVal&&cl.lv<100;
     const card=document.createElement('div');
-    card.style.cssText='border-radius:8px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+';padding:7px 5px;text-align:center;cursor:pointer;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.12)':'var(--s1)')+';transition:all .15s;position:relative;';
-    card.innerHTML=
+    card.style.cssText='border-radius:8px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+';padding:7px 5px;text-align:center;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.12)':'var(--s1)')+';transition:all .15s;position:relative;';
+    // Icon + name
+    const topDiv=document.createElement('div');
+    topDiv.style.cssText='cursor:pointer;';
+    topDiv.innerHTML=
       '<div style="font-size:1.2rem">'+char.icon+'</div>'+
       '<div style="font-size:.52rem;font-weight:700;color:'+rc.color+';margin-top:2px;line-height:1.2">'+char.name+'</div>'+
-      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+cls.name+' '+ele.icon+ele.name+'</div>'+
-      '<div style="font-size:.48rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>'+
-      (char.count>1?'<div style="position:absolute;top:3px;right:4px;font-size:.44rem;color:var(--tx3)">×'+char.count+'</div>':'')+
-      (onBoard?'<div style="font-size:.44rem;color:var(--jade2);margin-top:2px">出战中</div>':'');
-    card.onclick=()=>onBoard?removeCharFromBoard(char.id):addToBoard(char.id);
-    card.title=char.passive;
+      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
+      '<div style="font-size:.46rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>'+
+      '<div style="font-size:.5rem;color:var(--jade2);margin-top:2px">Lv.'+cl.lv+'</div>'+
+      (onBoard?'<div style="font-size:.42rem;color:var(--jade2)">出战中</div>':'<div style="font-size:.42rem;color:var(--tx3)">点击上阵</div>')+
+      (char.count>1?'<div style="position:absolute;top:3px;right:4px;font-size:.42rem;color:var(--tx3)">×'+char.count+'</div>':'');
+    topDiv.onclick=()=>onBoard?removeCharFromBoard(char.id):addToBoard(char.id);
+    topDiv.title=char.passive;
+    card.appendChild(topDiv);
+    // Train button
+    const trainBtn=document.createElement('button');
+    trainBtn.style.cssText='width:100%;margin-top:4px;padding:4px;border-radius:5px;border:1px solid '+(canTrain?'rgba(201,168,76,.5)':'var(--bd2)')+';background:'+(canTrain?'rgba(201,168,76,.08)':'rgba(50,50,70,.3)')+';color:'+(canTrain?'var(--gold2)':'var(--tx3)')+';font-size:.42rem;cursor:'+(canTrain?'pointer':'not-allowed')+';';
+    trainBtn.textContent=cl.lv>=100?'满级':'训练 '+fmt(trainCostVal)+'金';
+    trainBtn.onclick=(e)=>{ e.stopPropagation(); if(canTrain) trainChar(char.id); };
+    card.appendChild(trainBtn);
     list.appendChild(card);
   });
 }

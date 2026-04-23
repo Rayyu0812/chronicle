@@ -1938,3 +1938,57 @@ function getCharStars(charId) {
   const count=G.rosterInventory.filter(id=>id===charId).length;
   return Math.min(count,3); // max 3 stars
 }
+
+// ═══════════════════════════════════════════════════════
+//  CHARACTER LEVEL SYSTEM
+//  Each roster character has its own level (1-100)
+//  Training uses gold, increases char's baseAtk
+// ═══════════════════════════════════════════════════════
+
+// Get character level data (stored in G.charLevels)
+function getCharLevel(charId) {
+  if(!G.charLevels) G.charLevels={};
+  if(!G.charLevels[charId]) G.charLevels[charId]={ lv:1, exp:0 };
+  return G.charLevels[charId];
+}
+
+// Train a specific character (costs gold, increases their ATK)
+function trainChar(charId) {
+  const char=ROSTER.find(c=>c.id===charId);
+  if(!char){ notif('角色不存在'); return; }
+  const cl=getCharLevel(charId);
+  if(cl.lv>=100){ notif(char.name+' 已满级'); return; }
+
+  // Cost: scales with char level and rarity
+  const rarMult={1:1,2:1.5,3:2.5,4:5,5:10}[char.rar]||1;
+  const cost=Math.floor(100*cl.lv*rarMult);
+  if(G.gold<cost){ notif('金币不足 需要'+fmt(cost)); return; }
+
+  G.gold-=cost;
+  cl.lv++;
+
+  // EXP reward to player too
+  gainExp(cl.lv*10);
+
+  log(char.icon+' '+char.name+' 训练！Lv.'+cl.lv+' (-'+fmt(cost)+'金)','ev');
+  updateStats();
+  saveGame();
+  if(typeof renderRosterList==='function') renderRosterList();
+}
+
+// Get character's ATK contribution based on level
+function charAtkContrib(charId) {
+  const char=ROSTER.find(c=>c.id===charId); if(!char) return 0;
+  const cl=getCharLevel(charId);
+  const stars=getCharStars(charId);
+  const starMult=stars>=3?4:stars>=2?2:1;
+  // ATK scales: baseAtk * level * starMult * rarity
+  const rarMult={1:.5,2:1,3:2,4:4,5:8}[char.rar]||1;
+  return Math.floor(char.baseAtk * cl.lv * starMult * rarMult * 100);
+}
+
+// Total ATK bonus from all board characters
+function boardTotalAtk() {
+  const board=(G.board||[]).filter(Boolean);
+  return board.reduce((sum,id)=>sum+charAtkContrib(id),0);
+}

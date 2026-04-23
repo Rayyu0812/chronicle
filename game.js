@@ -64,6 +64,7 @@ function newGame() {
     gachaCrystals:0, gachaPulls:0, gachaPity:0,
     // Roster & Board (TFT system)
     rosterInventory:['r1_01','r1_04','r2_01'], // starter chars
+    charLevels:{}, // per-character level data
     rosterPity:0,
     board:['r1_01',null,null,null,null,null,null,null,null,null], // 10 slots, unlock per 10 levels
     // Active synergy bonuses (recalc on board change)
@@ -141,10 +142,10 @@ function totalAtk() {
   if(G.currentMod&&G.currentMod.allMult) a=Math.floor(a*G.currentMod.allMult);
   // Board synergy bonuses (from roster)
   if(G.syn_atkMult&&G.syn_atkMult>1) a=Math.floor(a*G.syn_atkMult);
-  // Board ATK from deployed characters
+  // Board ATK from deployed characters (additive flat bonus)
   if(G.board&&G.board.some(Boolean)){
-    const boardMult=typeof boardAtkMult==='function'?boardAtkMult():1;
-    if(boardMult>1) a=Math.floor(a*boardMult);
+    const bAtk=typeof boardTotalAtk==='function'?boardTotalAtk():0;
+    a+=bAtk;
   }
   // Prestige multiplier
   if(G.prestigeMult&&G.prestigeMult>1) a=Math.floor(a*G.prestigeMult);
@@ -352,6 +353,7 @@ function loadGame() {
     if(!G.teamDoubleHit) G.teamDoubleHit=0;
     calcTeamSynergies();
     if(!G.prestigeCount) G.prestigeCount=0;
+    if(!G.charLevels) G.charLevels={};
     if(!G.rosterInventory||!G.rosterInventory.length){
       G.rosterInventory=['r1_01','r1_04','r2_01']; // give starters
     }
