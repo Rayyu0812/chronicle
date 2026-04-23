@@ -63,9 +63,9 @@ function newGame() {
     // Gacha (Phase E)
     gachaCrystals:0, gachaPulls:0, gachaPity:0,
     // Roster & Board (TFT system)
-    rosterInventory:[], // char ids collected
+    rosterInventory:['r1_01','r1_04','r2_01'], // starter chars
     rosterPity:0,
-    board:Array(6).fill(null), // 3×2 grid, null=empty
+    board:['r1_01',null,null,null,null,null,null,null,null,null], // 10 slots, unlock per 10 levels
     // Active synergy bonuses (recalc on board change)
     syn_atkMult:1, syn_cdmg:0, syn_crit:0, syn_spd:0,
     syn_extraTime:0, syn_noRetro:0, syn_truePct:0,
@@ -352,12 +352,21 @@ function loadGame() {
     if(!G.teamDoubleHit) G.teamDoubleHit=0;
     calcTeamSynergies();
     if(!G.prestigeCount) G.prestigeCount=0;
-    if(!G.rosterInventory) G.rosterInventory=[];
+    if(!G.rosterInventory||!G.rosterInventory.length){
+      G.rosterInventory=['r1_01','r1_04','r2_01']; // give starters
+    }
     if(!G.rosterPity) G.rosterPity=0;
-    if(!G.board||G.board.length!==6) G.board=Array(6).fill(null);
+    if(!G.board||G.board.length!==10){
+      const old=G.board||[];
+      G.board=Array(10).fill(null);
+      old.slice(0,10).forEach((v,i)=>{ G.board[i]=v; });
+      if(!G.board[0]) G.board[0]='r1_01';
+    }
     if(G.syn_atkMult===undefined){ G.syn_atkMult=1; G.syn_cdmg=0; G.syn_crit=0; G.syn_spd=0; G.syn_extraTime=0; G.syn_noRetro=0; G.syn_truePct=0; G.syn_doubleHit=0; }
     // Recalc synergies on load
     try{ if(typeof calcBoardSynergies==='function') calcBoardSynergies(); }catch(e){}
+    // Reset _fighting state
+    G._fighting = false;
     if(!G.prestigeMult) G.prestigeMult=1;
     if(!G.eliteKills) G.eliteKills=0;
     if(!G.upgradeCount) G.upgradeCount=0;
@@ -2136,10 +2145,15 @@ function onWin() {
     const bCores = 2+Math.floor(G.stage/10);
     G.upgMats.boss_core=(G.upgMats.boss_core||0)+bCores;
     log('💀 Boss核心 ×'+bCores,'loot');
-    // Earn gacha crystals from boss kills
-    const crystalEarn = 5+Math.floor(G.stage/10)*2;
-    earnGachaCrystals(crystalEarn);
-    if(G.stage%10===0) log('💠 +'+crystalEarn+' 传说水晶','loot');
+    // Earn gacha crystals from boss kills - scarce!
+    // Only every 10 boss kills, earn 1 crystal
+    G.bossKillCount=(G.bossKillCount||0)+1;
+    if(G.bossKillCount%10===0){
+      earnGachaCrystals(1);
+      log('💠 +1 传说水晶 (每10次Boss)','loot');
+    }
+    // Stage milestones give bonus crystals
+    if(G.stage%50===0) { earnGachaCrystals(10); log('💠 +10 传说水晶 里程碑！','loot'); }
     // Rune drop from boss
     if(typeof RUNES!=='undefined'&&Math.random()<RUNE_DROP_CHANCE){
       const tier = G.stage<50?1:G.stage<200?2:G.stage<500?3:4;
@@ -2174,17 +2188,7 @@ function onWin() {
   checkMilestone(G.stage-1);
   pop('s-stage'); updateStats(); checkAchs();
   if(typeof updatePersonalBests==='function') updatePersonalBests();
-  if(typeof showGachaTabIfUnlocked==='function') showGachaTabIfUnlocked();
-  if(typeof showDungeonTabIfUnlocked==='function') showDungeonTabIfUnlocked();
   // Auto-notify unit unlocks at stage thresholds
-  if(G.best===50&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.spd){
-    log('🎉 Stage 50达成！疾风可以解锁了！去队伍页面查看','boss');
-    notif('⚡ 疾风可以解锁！队伍→解锁','#60d4a0');
-  }
-  if(G.best===120&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.crit){
-    log('🎉 Stage 120达成！刺客可以解锁了！','boss');
-    notif('🗡 刺客可以解锁！队伍→解锁','#c9a84c');
-  }
   updateTaskProgress('wins',1);
   updateTaskProgress('bossKills', G.isBoss?1:0);
   updateTaskProgress('stage', G.stage);
@@ -2335,17 +2339,7 @@ function initGame() {
       log('每10关Boss · 每5关精英怪 · 装备页选择强化路线','sys');
     }
     startFight(); runTimers(); checkAchs();
-    if(typeof showGachaTabIfUnlocked==='function') showGachaTabIfUnlocked();
-  if(typeof showDungeonTabIfUnlocked==='function') showDungeonTabIfUnlocked();
   // Auto-notify unit unlocks at stage thresholds
-  if(G.best===50&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.spd){
-    log('🎉 Stage 50达成！疾风可以解锁了！去队伍页面查看','boss');
-    notif('⚡ 疾风可以解锁！队伍→解锁','#60d4a0');
-  }
-  if(G.best===120&&typeof UNIT_UNLOCK_REQS!=='undefined'&&UNIT_UNLOCK_REQS.crit){
-    log('🎉 Stage 120达成！刺客可以解锁了！','boss');
-    notif('🗡 刺客可以解锁！队伍→解锁','#c9a84c');
-  }
   } catch(e) {
     console.error('initGame crash:', e);
     // Log error but NEVER auto-reset - let player decide

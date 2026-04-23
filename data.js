@@ -1877,11 +1877,16 @@ function pullRoster(multi=false) {
 }
 
 // ── BOARD SYSTEM (3×2 grid) ───────────────────────────
-const BOARD_ROWS=2, BOARD_COLS=3, BOARD_SIZE=6;
+const BOARD_ROWS=2, BOARD_COLS=5, BOARD_SIZE=10; // 2 rows x 5 cols, unlock by level
 
 // Init board slots
 function makeBoard() {
-  return Array(BOARD_SIZE).fill(null); // null = empty slot
+  return Array(10).fill(null);
+}
+
+// How many board slots unlocked: 1 per 10 levels, min 1 max 10
+function unlockedSlots() {
+  return Math.min(10, Math.max(1, Math.floor((G.level||1)/10) + 1));
 }
 
 // Count classes and elements on board for synergy

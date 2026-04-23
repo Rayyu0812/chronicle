@@ -46,7 +46,7 @@ body{font-family:'JetBrains Mono',monospace;color:var(--tx);
 .auto-btn.on{background:rgba(58,158,110,.1);border-color:var(--jade2);color:var(--jade2);}
 
 /* ── TABS ── */
-#tabs{flex-shrink:0;display:flex;border-bottom:1px solid var(--bd);} .tab{flex:1;}
+#tabs{flex-shrink:0;display:flex;border-bottom:1px solid var(--bd);overflow-x:auto;scrollbar-width:none;} #tabs::-webkit-scrollbar{display:none;} .tab{flex-shrink:0;}
 .tab{padding:9px 2px;text-align:center;font-size:.65rem;letter-spacing:.04em;color:var(--tx3);
   cursor:pointer;transition:all .2s;border-bottom:2px solid transparent;font-family:'JetBrains Mono',monospace;}
 .tab.on{color:var(--gold);border-bottom-color:var(--gold);}
