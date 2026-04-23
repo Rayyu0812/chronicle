@@ -1710,3 +1710,226 @@ PASSIVES.forEach(track=>{
   const ex=PASSIVE_EX2_NODES[track.id];
   if(ex) track.nodes.push(...ex);
 });
+
+// ═══════════════════════════════════════════════════════
+//  TFT-STYLE ROSTER & SYNERGY SYSTEM
+// ═══════════════════════════════════════════════════════
+
+// ── CLASSES (职业) ─────────────────────────────────────
+const CLASSES = {
+  warrior:  { name:'战士',   icon:'⚔',  color:'#d4522a', desc:'高ATK，前排肉盾' },
+  mage:     { name:'法师',   icon:'🔮',  color:'#8b5cf6', desc:'高暴击伤害，爆发强' },
+  assassin: { name:'刺客',   icon:'🗡',  color:'#c9a84c', desc:'极高速度，暴击叠加' },
+  ranger:   { name:'游侠',   icon:'🏹',  color:'#60d4a0', desc:'远程，稳定输出' },
+  paladin:  { name:'圣骑',   icon:'🛡',  color:'#4a9fd4', desc:'护盾，保护队友' },
+};
+
+// ── ELEMENTS (元素) ────────────────────────────────────
+const ELEMENTS = {
+  fire:  { name:'火',  icon:'🔥', color:'#ff6020', desc:'暴击时额外灼烧' },
+  water: { name:'水',  icon:'💧', color:'#4a9fd4', desc:'降低敌人速度' },
+  wind:  { name:'风',  icon:'🌪', color:'#60d4a0', desc:'提升全队攻速' },
+  thunder:{ name:'雷', icon:'⚡', color:'#c9a84c', desc:'连击触发链电' },
+  dark:  { name:'暗',  icon:'🌑', color:'#8b5cf6', desc:'吸血效果' },
+  light: { name:'光',  icon:'✨', color:'#f0e060', desc:'治疗/护盾' },
+};
+
+// ── CLASS SYNERGIES ────────────────────────────────────
+const CLASS_SYNERGIES = [
+  { class:'warrior',  need:2, name:'铁壁',   icon:'⚔⚔',   desc:'全队ATK+30%',         apply:(G)=>{ G.syn_atkMult=(G.syn_atkMult||1)*1.30; } },
+  { class:'warrior',  need:4, name:'无敌战线',icon:'⚔⚔⚔⚔',desc:'全队ATK+80%',         apply:(G)=>{ G.syn_atkMult=(G.syn_atkMult||1)*1.80; } },
+  { class:'mage',     need:2, name:'奥术共鸣',icon:'🔮🔮',  desc:'暴击伤害+80%',        apply:(G)=>{ G.syn_cdmg=(G.syn_cdmg||0)+80; } },
+  { class:'mage',     need:3, name:'法术风暴',icon:'🔮🔮🔮',desc:'暴击伤害+200%',       apply:(G)=>{ G.syn_cdmg=(G.syn_cdmg||0)+200; } },
+  { class:'assassin', need:2, name:'暗影刃',  icon:'🗡🗡',  desc:'暴击率+20%',          apply:(G)=>{ G.syn_crit=(G.syn_crit||0)+20; } },
+  { class:'assassin', need:3, name:'影杀',    icon:'🗡🗡🗡',desc:'暴击率+40%，速度+1.0',apply:(G)=>{ G.syn_crit=(G.syn_crit||0)+40; G.syn_spd=(G.syn_spd||0)+1.0; } },
+  { class:'ranger',   need:2, name:'狙击眼',  icon:'🏹🏹',  desc:'ATK×1.5，连击+10%',  apply:(G)=>{ G.syn_atkMult=(G.syn_atkMult||1)*1.50; } },
+  { class:'ranger',   need:4, name:'箭雨',    icon:'🏹🏹🏹🏹',desc:'每击双倍伤害15%',  apply:(G)=>{ G.syn_doubleHit=(G.syn_doubleHit||0)+0.15; } },
+  { class:'paladin',  need:2, name:'神圣护盾',icon:'🛡🛡',  desc:'战斗时间+60s',        apply:(G)=>{ G.syn_extraTime=(G.syn_extraTime||0)+60; } },
+  { class:'paladin',  need:3, name:'圣光庇护',icon:'🛡🛡🛡',desc:'失败不退关+40%',      apply:(G)=>{ G.syn_noRetro=(G.syn_noRetro||0)+0.40; } },
+];
+
+// ── ELEMENT SYNERGIES ──────────────────────────────────
+const ELEMENT_SYNERGIES = [
+  { element:'fire',   need:2, name:'炎热',   icon:'🔥🔥',  desc:'暴击触发灼烧，额外5%真伤', apply:(G)=>{ G.syn_fireBurn=true; } },
+  { element:'fire',   need:4, name:'烈焰',   icon:'🔥🔥🔥🔥',desc:'全队ATK+50%，真伤+10%',apply:(G)=>{ G.syn_atkMult=(G.syn_atkMult||1)*1.50; G.syn_truePct=(G.syn_truePct||0)+0.10; } },
+  { element:'water',  need:2, name:'水流',   icon:'💧💧',  desc:'敌人速度-30%，战斗时间+30s',apply:(G)=>{ G.syn_extraTime=(G.syn_extraTime||0)+30; } },
+  { element:'water',  need:3, name:'洪流',   icon:'💧💧💧',desc:'全队SPD+1.0，暴击+15%',  apply:(G)=>{ G.syn_spd=(G.syn_spd||0)+1.0; G.syn_crit=(G.syn_crit||0)+15; } },
+  { element:'wind',   need:2, name:'疾风',   icon:'🌪🌪',  desc:'全队攻速+0.8',           apply:(G)=>{ G.syn_spd=(G.syn_spd||0)+0.8; } },
+  { element:'wind',   need:4, name:'风暴',   icon:'🌪🌪🌪🌪',desc:'全队攻速+2.5',        apply:(G)=>{ G.syn_spd=(G.syn_spd||0)+2.5; } },
+  { element:'thunder',need:2, name:'雷鸣',   icon:'⚡⚡',  desc:'每5连击额外×2伤害',      apply:(G)=>{ G.syn_thunderChain=true; } },
+  { element:'thunder',need:4, name:'天雷',   icon:'⚡⚡⚡⚡',desc:'每击10%触发×5雷暴',   apply:(G)=>{ G.syn_thunderStorm=true; } },
+  { element:'dark',   need:2, name:'暗蚀',   icon:'🌑🌑',  desc:'每击吸取2%最大HP为金币', apply:(G)=>{ G.syn_darkDrain=true; } },
+  { element:'dark',   need:3, name:'虚空',   icon:'🌑🌑🌑',desc:'ATK×2，暴击伤害×1.5',  apply:(G)=>{ G.syn_atkMult=(G.syn_atkMult||1)*2.0; G.syn_cdmg=(G.syn_cdmg||0)+50; } },
+  { element:'light',  need:2, name:'圣光',   icon:'✨✨',  desc:'战斗时间+45s，不退关+20%',apply:(G)=>{ G.syn_extraTime=(G.syn_extraTime||0)+45; G.syn_noRetro=(G.syn_noRetro||0)+0.20; } },
+  { element:'light',  need:4, name:'神迹',   icon:'✨✨✨✨',desc:'全属性×1.5',          apply:(G)=>{ G.syn_atkMult=(G.syn_atkMult||1)*1.5; G.syn_spd=(G.syn_spd||0)+1.0; G.syn_cdmg=(G.syn_cdmg||0)+50; } },
+];
+
+// ── ROSTER — 50 CHARACTERS ────────────────────────────
+// id, name, icon, rarity(1-5), class, element, baseAtk, baseSpd, baseCrit, baseCdmg, passive
+const ROSTER = [
+  // ── RARITY 1 (Common) × 12 ──
+  { id:'r1_01', name:'新兵',   icon:'🧑',  rar:1, cls:'warrior',  ele:'fire',   baseAtk:1.0, baseSpd:1.0, baseCrit:5,  baseCdmg:150, passive:'普通攻击' },
+  { id:'r1_02', name:'见习法师',icon:'👦',  rar:1, cls:'mage',     ele:'water',  baseAtk:0.8, baseSpd:0.9, baseCrit:10, baseCdmg:180, passive:'小型魔法弹' },
+  { id:'r1_03', name:'小刺客', icon:'🧒',  rar:1, cls:'assassin', ele:'wind',   baseAtk:0.7, baseSpd:1.4, baseCrit:15, baseCdmg:200, passive:'快速突刺' },
+  { id:'r1_04', name:'弓手',   icon:'🧑‍🏹', rar:1, cls:'ranger',   ele:'thunder',baseAtk:0.9, baseSpd:1.1, baseCrit:8,  baseCdmg:160, passive:'精准射击' },
+  { id:'r1_05', name:'见习骑士',icon:'🧑‍⚔️', rar:1, cls:'paladin',  ele:'light',  baseAtk:0.6, baseSpd:0.8, baseCrit:3,  baseCdmg:130, passive:'小护盾' },
+  { id:'r1_06', name:'火焰术士',icon:'🧑‍🔬', rar:1, cls:'mage',     ele:'fire',   baseAtk:0.9, baseSpd:0.9, baseCrit:12, baseCdmg:190, passive:'火球术' },
+  { id:'r1_07', name:'暗影学徒',icon:'🧒',  rar:1, cls:'assassin', ele:'dark',   baseAtk:0.7, baseSpd:1.3, baseCrit:12, baseCdmg:190, passive:'暗影步' },
+  { id:'r1_08', name:'铁盾卫',  icon:'🧑‍🛡️', rar:1, cls:'warrior',  ele:'water',  baseAtk:0.9, baseSpd:0.9, baseCrit:4,  baseCdmg:140, passive:'铁盾格挡' },
+  { id:'r1_09', name:'风行者', icon:'🧑',  rar:1, cls:'ranger',   ele:'wind',   baseAtk:0.8, baseSpd:1.2, baseCrit:9,  baseCdmg:165, passive:'顺风箭' },
+  { id:'r1_10', name:'雷纹学徒',icon:'👦',  rar:1, cls:'mage',     ele:'thunder',baseAtk:0.8, baseSpd:1.0, baseCrit:11, baseCdmg:175, passive:'雷球' },
+  { id:'r1_11', name:'光明见习',icon:'🧒',  rar:1, cls:'paladin',  ele:'light',  baseAtk:0.5, baseSpd:0.8, baseCrit:3,  baseCdmg:120, passive:'治愈光' },
+  { id:'r1_12', name:'暗夜猎手',icon:'🧑',  rar:1, cls:'ranger',   ele:'dark',   baseAtk:0.9, baseSpd:1.1, baseCrit:10, baseCdmg:170, passive:'黑暗之箭' },
+
+  // ── RARITY 2 (Uncommon) × 12 ──
+  { id:'r2_01', name:'钢铁战士',icon:'⚔️',  rar:2, cls:'warrior',  ele:'fire',   baseAtk:1.3, baseSpd:1.0, baseCrit:6,  baseCdmg:160, passive:'猛力斩：每5击×2' },
+  { id:'r2_02', name:'冰霜法师',icon:'❄️',  rar:2, cls:'mage',     ele:'water',  baseAtk:1.1, baseSpd:0.9, baseCrit:14, baseCdmg:200, passive:'冰冻：减速敌人' },
+  { id:'r2_03', name:'幻影刺客',icon:'🌙',  rar:2, cls:'assassin', ele:'dark',   baseAtk:1.0, baseSpd:1.5, baseCrit:20, baseCdmg:220, passive:'幻影：30%闪避' },
+  { id:'r2_04', name:'飞鹰游侠',icon:'🦅',  rar:2, cls:'ranger',   ele:'wind',   baseAtk:1.2, baseSpd:1.2, baseCrit:12, baseCdmg:175, passive:'鹰眼：暴击+10%' },
+  { id:'r2_05', name:'圣光骑士',icon:'🛡️',  rar:2, cls:'paladin',  ele:'light',  baseAtk:0.8, baseSpd:0.9, baseCrit:5,  baseCdmg:140, passive:'圣光护盾：每10s' },
+  { id:'r2_06', name:'火焰剑士',icon:'🔥',  rar:2, cls:'warrior',  ele:'fire',   baseAtk:1.4, baseSpd:1.0, baseCrit:8,  baseCdmg:170, passive:'火焰剑气' },
+  { id:'r2_07', name:'雷电游侠',icon:'⚡',  rar:2, cls:'ranger',   ele:'thunder',baseAtk:1.1, baseSpd:1.3, baseCrit:15, baseCdmg:185, passive:'雷矢：连击' },
+  { id:'r2_08', name:'暗月刺客',icon:'🌑',  rar:2, cls:'assassin', ele:'dark',   baseAtk:1.0, baseSpd:1.6, baseCrit:22, baseCdmg:230, passive:'月影步' },
+  { id:'r2_09', name:'风舞法师',icon:'🌪️',  rar:2, cls:'mage',     ele:'wind',   baseAtk:1.0, baseSpd:1.1, baseCrit:16, baseCdmg:210, passive:'风旋魔法' },
+  { id:'r2_10', name:'雷鸣战士',icon:'⚡',  rar:2, cls:'warrior',  ele:'thunder',baseAtk:1.3, baseSpd:1.1, baseCrit:7,  baseCdmg:165, passive:'雷击：每10击触发' },
+  { id:'r2_11', name:'水系圣骑',icon:'💧',  rar:2, cls:'paladin',  ele:'water',  baseAtk:0.7, baseSpd:0.9, baseCrit:4,  baseCdmg:135, passive:'水盾反弹' },
+  { id:'r2_12', name:'光明游侠',icon:'✨',  rar:2, cls:'ranger',   ele:'light',  baseAtk:1.1, baseSpd:1.2, baseCrit:13, baseCdmg:180, passive:'圣光箭矢' },
+
+  // ── RARITY 3 (Rare) × 12 ──
+  { id:'r3_01', name:'烈焰将军',icon:'🔴',  rar:3, cls:'warrior',  ele:'fire',   baseAtk:1.8, baseSpd:1.0, baseCrit:10, baseCdmg:180, passive:'烈焰冲锋：每3击爆发' },
+  { id:'r3_02', name:'深渊法师',icon:'🟣',  rar:3, cls:'mage',     ele:'dark',   baseAtk:1.5, baseSpd:1.0, baseCrit:20, baseCdmg:250, passive:'黑洞：吸取周围' },
+  { id:'r3_03', name:'神速刺客',icon:'🟡',  rar:3, cls:'assassin', ele:'wind',   baseAtk:1.2, baseSpd:2.0, baseCrit:30, baseCdmg:260, passive:'极速：SPD上限+2' },
+  { id:'r3_04', name:'神鹰射手',icon:'🦉',  rar:3, cls:'ranger',   ele:'thunder',baseAtk:1.5, baseSpd:1.3, baseCrit:18, baseCdmg:200, passive:'贯穿：无视防御' },
+  { id:'r3_05', name:'圣域骑士',icon:'⭐',  rar:3, cls:'paladin',  ele:'light',  baseAtk:1.0, baseSpd:1.0, baseCrit:6,  baseCdmg:150, passive:'圣域：全队+15%ATK' },
+  { id:'r3_06', name:'冰霜女皇',icon:'❄️',  rar:3, cls:'mage',     ele:'water',  baseAtk:1.4, baseSpd:1.0, baseCrit:18, baseCdmg:230, passive:'冰封：冻结3s' },
+  { id:'r3_07', name:'暗夜主宰',icon:'🌙',  rar:3, cls:'assassin', ele:'dark',   baseAtk:1.3, baseSpd:1.8, baseCrit:28, baseCdmg:270, passive:'暗夜领域：全队Crit+10%' },
+  { id:'r3_08', name:'雷神战士',icon:'⚡',  rar:3, cls:'warrior',  ele:'thunder',baseAtk:1.7, baseSpd:1.1, baseCrit:9,  baseCdmg:175, passive:'雷霆：范围攻击' },
+  { id:'r3_09', name:'风暴游侠',icon:'🌪️',  rar:3, cls:'ranger',   ele:'wind',   baseAtk:1.4, baseSpd:1.5, baseCrit:20, baseCdmg:210, passive:'风暴箭：AOE' },
+  { id:'r3_10', name:'烈火圣骑',icon:'🔥',  rar:3, cls:'paladin',  ele:'fire',   baseAtk:1.1, baseSpd:1.0, baseCrit:8,  baseCdmg:160, passive:'烈焰护盾' },
+  { id:'r3_11', name:'水月刺客',icon:'💧',  rar:3, cls:'assassin', ele:'water',  baseAtk:1.2, baseSpd:1.9, baseCrit:25, baseCdmg:255, passive:'水月步：回避' },
+  { id:'r3_12', name:'光明法师',icon:'✨',  rar:3, cls:'mage',     ele:'light',  baseAtk:1.3, baseSpd:1.0, baseCrit:16, baseCdmg:220, passive:'圣光爆裂' },
+
+  // ── RARITY 4 (Epic) × 8 ──
+  { id:'r4_01', name:'炎龙战神',icon:'🐉',  rar:4, cls:'warrior',  ele:'fire',   baseAtk:2.5, baseSpd:1.1, baseCrit:15, baseCdmg:220, passive:'龙焰爆裂：每5击×5爆发' },
+  { id:'r4_02', name:'时空法师',icon:'⏳',  rar:4, cls:'mage',     ele:'wind',   baseAtk:2.0, baseSpd:1.2, baseCrit:25, baseCdmg:300, passive:'时空扭曲：全队SPD×1.5' },
+  { id:'r4_03', name:'死神刺客',icon:'💀',  rar:4, cls:'assassin', ele:'dark',   baseAtk:1.8, baseSpd:2.2, baseCrit:40, baseCdmg:320, passive:'死神降临：连续暴击×2叠加' },
+  { id:'r4_04', name:'雷霆主宰',icon:'⚡',  rar:4, cls:'ranger',   ele:'thunder',baseAtk:2.2, baseSpd:1.4, baseCrit:25, baseCdmg:250, passive:'天雷：每击10%×5伤害' },
+  { id:'r4_05', name:'圣光天使',icon:'👼',  rar:4, cls:'paladin',  ele:'light',  baseAtk:1.4, baseSpd:1.1, baseCrit:10, baseCdmg:180, passive:'天使庇佑：全队+30%所有属性' },
+  { id:'r4_06', name:'冰封之王',icon:'🧊',  rar:4, cls:'warrior',  ele:'water',  baseAtk:2.3, baseSpd:1.0, baseCrit:12, baseCdmg:200, passive:'冰封领域：敌人速度-50%' },
+  { id:'r4_07', name:'暗影领主',icon:'🌑',  rar:4, cls:'assassin', ele:'dark',   baseAtk:2.0, baseSpd:2.0, baseCrit:38, baseCdmg:330, passive:'暗影吞噬：吸血30%' },
+  { id:'r4_08', name:'凤凰法师',icon:'🦅',  rar:4, cls:'mage',     ele:'fire',   baseAtk:2.1, baseSpd:1.1, baseCrit:28, baseCdmg:280, passive:'凤凰涅槃：复活一次' },
+
+  // ── RARITY 5 (Legendary) × 6 ──
+  { id:'r5_01', name:'混沌之神',icon:'🔱',  rar:5, cls:'warrior',  ele:'dark',   baseAtk:4.0, baseSpd:1.2, baseCrit:20, baseCdmg:300, passive:'混沌领域：全队ATK×2，每5击造成×10爆发' },
+  { id:'r5_02', name:'命运织者',icon:'🌌',  rar:5, cls:'mage',     ele:'light',  baseAtk:3.5, baseSpd:1.3, baseCrit:35, baseCdmg:400, passive:'命运之力：所有属性×1.5+暴击伤害×3' },
+  { id:'r5_03', name:'虚空刺客',icon:'💠',  rar:5, cls:'assassin', ele:'wind',   baseAtk:3.0, baseSpd:2.5, baseCrit:50, baseCdmg:500, passive:'虚空步：无敌帧+连击叠加无上限' },
+  { id:'r5_04', name:'天地游侠',icon:'🌟',  rar:5, cls:'ranger',   ele:'thunder',baseAtk:3.5, baseSpd:1.6, baseCrit:30, baseCdmg:350, passive:'天地箭：贯穿+每击20%双倍' },
+  { id:'r5_05', name:'神明圣骑',icon:'👑',  rar:5, cls:'paladin',  ele:'light',  baseAtk:2.0, baseSpd:1.2, baseCrit:12, baseCdmg:220, passive:'神明庇护：全队所有属性×2+不败之身' },
+  { id:'r5_06', name:'末日烈焰',icon:'☄️',  rar:5, cls:'warrior',  ele:'fire',   baseAtk:4.5, baseSpd:1.1, baseCrit:18, baseCdmg:280, passive:'末日焚天：每10击造成×50爆发' },
+];
+
+// Rarity settings
+const RARITY_CONFIG = {
+  1: { name:'普通',   color:'#888',     rate:0.45 },
+  2: { name:'罕见',   color:'#60d4a0',  rate:0.30 },
+  3: { name:'稀有',   color:'#4a9fd4',  rate:0.17 },
+  4: { name:'史诗',   color:'#8b5cf6',  rate:0.07 },
+  5: { name:'传说',   color:'#c9a84c',  rate:0.01 },
+};
+
+// ── ROSTER GACHA ──────────────────────────────────────
+const ROSTER_BANNER = {
+  id:'roster',
+  name:'角色祈愿',
+  cost:{ single:160, multi:1600 },
+  pity:{ soft:70, hard:90, guaranteed5:false },
+};
+
+// Roster pull result → gives a character from ROSTER
+function pullRoster(multi=false) {
+  const pulls = multi ? 10 : 1;
+  const cost = multi ? ROSTER_BANNER.cost.multi : ROSTER_BANNER.cost.single;
+  if((G.gachaCrystals||0) < cost){ notif('传说水晶不足'); return []; }
+  G.gachaCrystals -= cost;
+  if(!G.rosterPity) G.rosterPity=0;
+  if(!G.rosterInventory) G.rosterInventory=[];
+  const results=[];
+  for(let i=0;i<pulls;i++){
+    G.rosterPity++;
+    let rar=1;
+    const roll=Math.random();
+    if(G.rosterPity>=ROSTER_BANNER.pity.hard){ rar=5; G.rosterPity=0; }
+    else if(G.rosterPity>=ROSTER_BANNER.pity.soft&&Math.random()<0.5){ rar=5; G.rosterPity=0; }
+    else if(roll<0.01) rar=5;
+    else if(roll<0.08) rar=4;
+    else if(roll<0.25) rar=3;
+    else if(roll<0.55) rar=2;
+    else rar=1;
+    // Pick random char of that rarity
+    const pool=ROSTER.filter(c=>c.rar===rar);
+    const char=pool[~~(Math.random()*pool.length)];
+    // Add to inventory (allow duplicates → used for upgrades)
+    G.rosterInventory.push(char.id);
+    results.push(char);
+  }
+  saveGame();
+  return results;
+}
+
+// ── BOARD SYSTEM (3×2 grid) ───────────────────────────
+const BOARD_ROWS=2, BOARD_COLS=3, BOARD_SIZE=6;
+
+// Init board slots
+function makeBoard() {
+  return Array(BOARD_SIZE).fill(null); // null = empty slot
+}
+
+// Count classes and elements on board for synergy
+function calcBoardSynergies() {
+  const board=(G.board||[]).filter(Boolean);
+  const clsCounts={}, eleCounts={};
+  board.forEach(charId=>{
+    const c=ROSTER.find(x=>x.id===charId); if(!c) return;
+    clsCounts[c.cls]=(clsCounts[c.cls]||0)+1;
+    eleCounts[c.ele]=(eleCounts[c.ele]||0)+1;
+  });
+  // Reset synergy bonuses
+  G.syn_atkMult=1; G.syn_cdmg=0; G.syn_crit=0; G.syn_spd=0;
+  G.syn_extraTime=0; G.syn_noRetro=0; G.syn_truePct=0;
+  G.syn_doubleHit=0; G.syn_fireBurn=false;
+  G.syn_darkDrain=false; G.syn_thunderChain=false; G.syn_thunderStorm=false;
+  const active=[];
+  // Apply class synergies
+  CLASS_SYNERGIES.forEach(syn=>{
+    if((clsCounts[syn.class]||0)>=syn.need){ syn.apply(G); active.push(syn); }
+  });
+  // Apply element synergies
+  ELEMENT_SYNERGIES.forEach(syn=>{
+    if((eleCounts[syn.element]||0)>=syn.need){ syn.apply(G); active.push(syn); }
+  });
+  G._activeSynList=active;
+  G._clsCounts=clsCounts;
+  G._eleCounts=eleCounts;
+  return active;
+}
+
+// Get board total ATK multiplier (sum of all deployed chars)
+function boardAtkMult() {
+  const board=(G.board||[]).filter(Boolean);
+  if(!board.length) return 1;
+  let mult=1;
+  board.forEach(charId=>{
+    const c=ROSTER.find(x=>x.id===charId); if(!c) return;
+    // Star level multiplier
+    const stars=getCharStars(charId);
+    const starMult=stars>=3?4:stars>=2?2:1;
+    mult += (c.baseAtk-1)*starMult; // additive bonus beyond 1x
+  });
+  return Math.max(1, mult*(G.syn_atkMult||1)*(G.syn_atkMult>1?1:1));
+}
+
+function getCharStars(charId) {
+  if(!G.rosterInventory) return 1;
+  const count=G.rosterInventory.filter(id=>id===charId).length;
+  return Math.min(count,3); // max 3 stars
+}

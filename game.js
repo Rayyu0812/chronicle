@@ -62,6 +62,15 @@ function newGame() {
     _timerGen:0,
     // Gacha (Phase E)
     gachaCrystals:0, gachaPulls:0, gachaPity:0,
+    // Roster & Board (TFT system)
+    rosterInventory:[], // char ids collected
+    rosterPity:0,
+    board:Array(6).fill(null), // 3×2 grid, null=empty
+    // Active synergy bonuses (recalc on board change)
+    syn_atkMult:1, syn_cdmg:0, syn_crit:0, syn_spd:0,
+    syn_extraTime:0, syn_noRetro:0, syn_truePct:0,
+    syn_doubleHit:0, syn_fireBurn:false,
+    syn_darkDrain:false, syn_thunderChain:false, syn_thunderStorm:false,
     // Rune system
     runesEquipped:[], runeAtk:0, runeSpd:0, runeCrit:0, runeCdmg:0,
     runeGoldMult:0, runeTruePct:0, runeComboBonus:false,
@@ -130,6 +139,13 @@ function totalAtk() {
   if(G.runeComboBonus) a=Math.floor(a*(1+Math.min(G.combo,200)*0.03));
   // Stage modifier all-stat boost
   if(G.currentMod&&G.currentMod.allMult) a=Math.floor(a*G.currentMod.allMult);
+  // Board synergy bonuses (from roster)
+  if(G.syn_atkMult&&G.syn_atkMult>1) a=Math.floor(a*G.syn_atkMult);
+  // Board ATK from deployed characters
+  if(G.board&&G.board.some(Boolean)){
+    const boardMult=typeof boardAtkMult==='function'?boardAtkMult():1;
+    if(boardMult>1) a=Math.floor(a*boardMult);
+  }
   // Prestige multiplier
   if(G.prestigeMult&&G.prestigeMult>1) a=Math.floor(a*G.prestigeMult);
   // Prestige rune bonus
@@ -149,6 +165,7 @@ function totalSpd() {
   // Awakening SPD bonuses
   for(const b of (G.awakeningBonuses||[])) s+=b.spdBonus||0;
   s += (G.runeSpd||0);
+  s += (G.syn_spd||0);
   return Math.min(+(s.toFixed(2)), spdCap());
 }
 
@@ -156,6 +173,7 @@ function totalCrit() {
   let c = G.critChance + G.eqCrit + (G.tCrit||0) + G.setBonusCrit - (G.tCritPen||0);
   for(const b of (G.awakeningBonuses||[])) c+=b.critBonus||0;
   c += (G.runeCrit||0);
+  c += (G.syn_crit||0);
   return Math.max(0, c);
 }
 
@@ -164,6 +182,7 @@ function totalCritDmg() {
   // Shadow set 4pc
   if(setCount('shadow')>=4) c+=100;
   c += (G.runeCdmg||0);
+  c += (G.syn_cdmg||0);
   return c;
 }
 
@@ -182,6 +201,7 @@ function calcTimeLimit() {
   }
   if(hasSkill('time_ctrl')) t+=30;
   t += (G.runeTime||0);
+  t += (G.syn_extraTime||0);
   return t;
 }
 
@@ -332,6 +352,12 @@ function loadGame() {
     if(!G.teamDoubleHit) G.teamDoubleHit=0;
     calcTeamSynergies();
     if(!G.prestigeCount) G.prestigeCount=0;
+    if(!G.rosterInventory) G.rosterInventory=[];
+    if(!G.rosterPity) G.rosterPity=0;
+    if(!G.board||G.board.length!==6) G.board=Array(6).fill(null);
+    if(G.syn_atkMult===undefined){ G.syn_atkMult=1; G.syn_cdmg=0; G.syn_crit=0; G.syn_spd=0; G.syn_extraTime=0; G.syn_noRetro=0; G.syn_truePct=0; G.syn_doubleHit=0; }
+    // Recalc synergies on load
+    try{ if(typeof calcBoardSynergies==='function') calcBoardSynergies(); }catch(e){}
     if(!G.prestigeMult) G.prestigeMult=1;
     if(!G.eliteKills) G.eliteKills=0;
     if(!G.upgradeCount) G.upgradeCount=0;
@@ -1752,6 +1778,18 @@ function runTimers() {
 
     // True damage talent
     if(T.id==='true_dmg'&&T.truePct) totalHit+=Math.floor(G.enemyMax*T.truePct);
+    // Board synergy: fire burn true damage
+    if(G.syn_fireBurn&&isCrit) totalHit+=Math.floor(G.enemyMax*0.05);
+    // Board synergy: true damage %
+    if(G.syn_truePct) totalHit+=Math.floor(G.enemyMax*G.syn_truePct);
+    // Board synergy: thunder chain
+    if(G.syn_thunderChain){ G._thunderCtr=(G._thunderCtr||0)+1; if(G._thunderCtr>=5){ G._thunderCtr=0; totalHit=Math.floor(totalHit*2); } }
+    // Board synergy: thunder storm
+    if(G.syn_thunderStorm&&Math.random()<0.10) totalHit=Math.floor(totalHit*5);
+    // Board synergy: dark drain (gold)
+    if(G.syn_darkDrain) G.gold+=Math.floor(G.enemyMax*0.02);
+    // Board synergy: double hit
+    if(G.syn_doubleHit&&Math.random()<G.syn_doubleHit){ const dh=Math.floor(totalHit*0.7); G.enemyHP=Math.max(0,G.enemyHP-dh); G.totalDmgFight+=dh; G.totalDmg+=dh; }
 
     // Skill procs
     let skillLabel='';
@@ -2176,7 +2214,7 @@ function onLose() {
   G._fighting = false;
   stopTimers(); G.combo=0;
   // No-retreat passives (eternal_will skill + endurance passive)
-  const noRetroChance=(hasSkill('eternal_will')?SKILLS.find(s=>s.id==='eternal_will').noRetrocChance:0)+(G.pb.noRetro||0);
+  const noRetroChance=(hasSkill('eternal_will')?SKILLS.find(s=>s.id==='eternal_will').noRetrocChance:0)+(G.pb.noRetro||0)+(G.syn_noRetro||0);
   if(noRetroChance>0&&Math.random()<noRetroChance){
     log('🛡 永恒意志！不退关，重新挑战','skill');
     G.streak=0; G.fights++;

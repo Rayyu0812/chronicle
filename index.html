@@ -371,13 +371,36 @@
     <div id="rune-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:4px;"></div>
   </div>
 
-  <!-- ══ TEAM PAGE ══ -->
+  <!-- ══ TEAM PAGE (TFT Board) ══ -->
   <div class="page" id="team-page">
-    <div style="flex-shrink:0;padding:8px 12px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;">
-      <div style="font-family:'Cormorant Garamond',serif;font-size:1rem;color:var(--gold)">👥 队伍</div>
-      <div id="team-synergy-badge" style="font-size:.52rem;color:var(--violet2)"></div>
+    <!-- Header -->
+    <div style="flex-shrink:0;padding:7px 10px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-family:'Cormorant Garamond',serif;font-size:.95rem;color:var(--gold)">👥 阵容</div>
+      <button onclick="goTab(document.querySelector('.tab[onclick*=gacha]'),'gacha')" style="font-size:.55rem;padding:3px 9px;background:rgba(201,168,76,.1);border:1px solid var(--gold);border-radius:5px;color:var(--gold2);cursor:pointer">💠 去抽卡</button>
     </div>
-    <div id="team-list" style="flex:1;overflow-y:auto;padding:8px;display:flex;flex-direction:column;gap:8px;"></div>
+
+    <div style="flex:1;overflow-y:auto;">
+      <!-- Active Synergies -->
+      <div id="syn-bar" style="padding:5px 8px;background:rgba(139,92,246,.06);border-bottom:1px solid var(--bd);min-height:28px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+        <span style="font-size:.5rem;color:var(--tx3)">羁绊：</span>
+        <div id="syn-tags" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+      </div>
+
+      <!-- 3×2 Board Grid -->
+      <div style="padding:8px 10px 6px;">
+        <div style="font-size:.54rem;color:var(--tx3);margin-bottom:6px;letter-spacing:.06em">出战阵容 <span style="color:var(--jade2)" id="board-count">0/6</span></div>
+        <div id="board-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;"></div>
+      </div>
+
+      <!-- Roster Inventory -->
+      <div style="padding:4px 10px 4px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <div style="font-size:.54rem;color:var(--tx3);letter-spacing:.06em">角色背包 <span id="roster-count" style="color:var(--tx)">0</span></div>
+          <div style="font-size:.5rem;color:var(--tx3)">点击上阵/下场</div>
+        </div>
+        <div id="roster-list" style="display:grid;grid-template-columns:repeat(3,1fr);gap:5px;"></div>
+      </div>
+    </div>
   </div>
 
   <!-- ══ SETTINGS PAGE ══ -->
@@ -1070,9 +1093,43 @@ function renderAchs() {
 // ── GACHA RENDER ─────────────────────────────────────────────
 function renderGacha() {
   $('gacha-crystals').textContent=G.gachaCrystals||0;
-  $('gacha-pity-count').textContent=G.gachaPity||0;
+  $('gacha-pity-count').textContent=G.rosterPity||0;
   const list=$('gacha-list'); if(!list) return;
   list.innerHTML='';
+
+  // ── ROSTER BANNER (main) ──────────────────────────────
+  const rosterCard=document.createElement('div');
+  const canS=(G.gachaCrystals||0)>=160, canM=(G.gachaCrystals||0)>=1600;
+  rosterCard.style.cssText='background:linear-gradient(135deg,rgba(201,168,76,.08),rgba(139,92,246,.08));border:1px solid var(--gold);border-radius:11px;padding:13px;margin-bottom:6px;';
+  const ownedCount=Object.keys((G.rosterInventory||[]).reduce((m,id)=>{m[id]=1;return m;},{})).length;
+  // Build roster card with DOM (avoids quote nesting issues)
+  const rcHdr=document.createElement('div'); rcHdr.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:8px;';
+  rcHdr.innerHTML='<span style="font-size:1.6rem">🌟</span><div><div style="font-size:.9rem;font-weight:700;color:var(--gold)">角色祈愿</div><div style="font-size:.54rem;color:var(--tx3);margin-top:1px">50+角色 · 职业+元素羁绊 · 5★保底90抽</div></div>';
+  rosterCard.appendChild(rcHdr);
+  const rcInfo=document.createElement('div'); rcInfo.style.cssText='font-size:.54rem;color:var(--tx3);margin-bottom:8px;';
+  rcInfo.innerHTML='5★: 1% · 4★: 7% · 3★: 17% · 保底: <span style="color:var(--gold)">'+(G.rosterPity||0)+'/90</span>';
+  rosterCard.appendChild(rcInfo);
+  const rcBtns=document.createElement('div'); rcBtns.style.cssText='display:flex;gap:6px;';
+  const rcS=document.createElement('button');
+  rcS.style.cssText='flex:1;padding:9px;border-radius:7px;border:1px solid '+(canS?'var(--gold)':'var(--bd2)')+';background:'+(canS?'rgba(201,168,76,.1)':'rgba(100,100,120,.05)')+';color:'+(canS?'var(--gold2)':'var(--tx3)')+';font-size:.62rem;cursor:'+(canS?'pointer':'not-allowed');
+  rcS.innerHTML='单抽<br><span style="font-size:.52rem">💠160</span>';
+  if(canS) rcS.onclick=()=>pullAndShow('roster',false);
+  const rcM=document.createElement('button');
+  rcM.style.cssText='flex:2;padding:9px;border-radius:7px;border:1px solid '+(canM?'var(--violet)':'var(--bd2)')+';background:'+(canM?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)')+';color:'+(canM?'var(--violet2)':'var(--tx3)')+';font-size:.62rem;cursor:'+(canM?'pointer':'not-allowed');
+  rcM.innerHTML='十连<br><span style="font-size:.52rem">💠1600</span>';
+  if(canM) rcM.onclick=()=>pullAndShow('roster',true);
+  rcBtns.appendChild(rcS); rcBtns.appendChild(rcM); rosterCard.appendChild(rcBtns);
+  const rcOwn=document.createElement('div'); rcOwn.style.cssText='font-size:.5rem;color:var(--tx3);margin-top:7px;text-align:center;';
+  rcOwn.textContent='已有角色: '+ownedCount+' / '+ROSTER.length;
+  rosterCard.appendChild(rcOwn);
+  list.appendChild(rosterCard);
+
+  // ── DIVIDER ──────────────────────────────────────────
+  const div=document.createElement('div');
+  div.style.cssText='font-size:.54rem;color:var(--tx3);margin:6px 0 4px;letter-spacing:.08em;text-align:center;';
+  div.textContent='── 其他祈愿 ──';
+  list.appendChild(div);
+
   GACHA_BANNERS.forEach(banner=>{
     const card=document.createElement('div');
     card.style.cssText='background:var(--s1);border:1px solid var(--bd2);border-radius:10px;padding:12px;';
@@ -1084,7 +1141,7 @@ function renderGacha() {
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
         <span style="font-size:1.5rem">${banner.icon}</span>
         <div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:.9rem;font-weight:700;color:var(--gold)">${banner.name}</div>
+          <div style="font-family:serif;font-size:.9rem;font-weight:700;color:var(--gold)">${banner.name}</div>
           <div style="font-size:.56rem;color:var(--tx3);margin-top:1px">${banner.desc}</div>
         </div>
       </div>
@@ -1109,16 +1166,50 @@ function renderGacha() {
 }
 
 function pullAndShow(bannerId, multi) {
+  // Roster pull
+  if(bannerId==='roster'){
+    const results=pullRoster(multi);
+    if(!results.length) return;
+    showPullResults(results);
+    return;
+  }
+  // Legacy item pull
   const results=doGachaPull(bannerId, multi);
   if(!results.length) return;
   const hasSSR=results.some(r=>r.rar==='mythic');
-  const body=results.map(r=>{
-    const rarColor={common:'var(--tx)',rare:'var(--rr)',epic:'var(--re)',legendary:'var(--rl)',mythic:'var(--rm)'}[r.rar]||'var(--tx)';
-    return `[${RNAME[r.rar]||r.rar}] ${r.icon} ${r.name}`;
-  }).join(' / ');
+  const body=results.map(r=>`[${RNAME[r.rar]||r.rar}] ${r.icon} ${r.name}`).join(' / ');
   openModal(hasSSR?'🌟 传说级获得！':'祈愿结果', body,
     [{label:'确认',cls:'m-ok',cb:()=>{closeModal();renderGacha();}}]);
   if(hasSSR){ spawnParts('legendary'); }
+  updateStats();
+}
+
+function showPullResults(results) {
+  const body=$('m-body'); if(!body) return;
+  $('m-title').textContent='祈愿结果 ×'+results.length;
+  body.innerHTML='';
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px 0;';
+  results.forEach(char=>{
+    const rc=RARITY_CONFIG[char.rar];
+    const cls=CLASSES[char.cls]||{icon:'?',name:'?'};
+    const ele=ELEMENTS[char.ele]||{icon:'?',name:'?'};
+    const card=document.createElement('div');
+    card.style.cssText='border:1px solid '+rc.color+';border-radius:8px;padding:8px 4px;text-align:center;background:rgba('+hexToRgb(rc.color)+',.08);';
+    card.innerHTML='<div style="font-size:1.4rem">'+char.icon+'</div>'+
+      '<div style="font-size:.56rem;font-weight:700;color:'+rc.color+';margin-top:2px">'+char.name+'</div>'+
+      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
+      '<div style="font-size:.5rem;color:'+rc.color+'">'+rc.name+'</div>';
+    grid.appendChild(card);
+  });
+  body.appendChild(grid);
+  const $m=$('m-btns'); $m.innerHTML='';
+  const ok=document.createElement('button'); ok.className='m-btn m-ok'; ok.textContent='确认';
+  ok.onclick=()=>{ closeModal(); renderGacha(); if(document.getElementById('team-page').classList.contains('on')) renderTeam(); };
+  $m.appendChild(ok);
+  $('overlay').classList.add('on');
+  const hasFive=results.some(r=>r.rar===5);
+  if(hasFive){ spawnParts('legendary'); }
   updateStats();
 }
 
@@ -1155,115 +1246,819 @@ function renderMatSinks() {
   });
 }
 
-// ── TEAM RENDER ──────────────────────────────────────
+// ── TEAM / BOARD RENDER ──────────────────────────────
 function renderTeam() {
-  const list=$('team-list'); if(!list) return;
-  list.innerHTML='';
-  const units=G.units||[];
+  renderBoard();
+  renderRosterList();
+  renderSynBadges();
+}
 
-  // Active synergies
-  const badge=$('team-synergy-badge');
-  if(badge){
-    const active=units.filter(u=>u.unlocked);
-    const roleStr=active.map(u=>u.icon||(u.role==='atk'?'⚔':u.role==='spd'?'⚡':'🗡')).join('');
-    if(G._activeSynergies&&G._activeSynergies.length>0){
-      badge.textContent=roleStr+' · '+G._activeSynergies.join(' + ');
-      badge.style.color='var(--jade2)';
+function renderBoard() {
+  const grid=$('board-grid'); if(!grid) return;
+  grid.innerHTML='';
+  const board=G.board||Array(6).fill(null);
+  const filled=board.filter(Boolean).length;
+  $('board-count').textContent=filled+'/6';
+
+  for(let i=0;i<6;i++){
+    const charId=board[i];
+    const char=charId?ROSTER.find(c=>c.id===charId):null;
+    const slot=document.createElement('div');
+    slot.style.cssText='border-radius:9px;border:1px dashed;padding:7px 5px;text-align:center;cursor:pointer;min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all .15s;';
+
+    if(char){
+      const rc=RARITY_CONFIG[char.rar];
+      const stars=getCharStars(char.id);
+      const cls=CLASSES[char.cls];
+      const ele=ELEMENTS[char.ele];
+      slot.style.borderColor=rc.color;
+      slot.style.background='rgba('+hexToRgb(rc.color)+',.08)';
+      slot.innerHTML=
+        '<div style="font-size:1.4rem">'+char.icon+'</div>'+
+        '<div style="font-size:.56rem;font-weight:700;color:'+rc.color+';margin-top:2px">'+char.name+'</div>'+
+        '<div style="font-size:.48rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
+        '<div style="font-size:.5rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>';
+      slot.title=char.name+' — 点击移除';
+      slot.onclick=()=>removeFromBoard(i);
     } else {
-      badge.textContent=roleStr+(active.length>1?' · 无协同':' · 单人');
-      badge.style.color='var(--tx3)';
+      slot.style.borderColor='var(--bd2)';
+      slot.style.color='var(--tx3)';
+      slot.innerHTML='<div style="font-size:1.2rem;opacity:.3">+</div><div style="font-size:.48rem;margin-top:2px">空槽</div>';
+      slot.onclick=()=>{ notif('从背包选择角色上阵'); };
     }
-  }
-
-  // Synergy panel
-  if(typeof TEAM_SYNERGIES!=='undefined'){
-    const synPanel=document.createElement('div');
-    synPanel.className='panel';
-    synPanel.innerHTML='<div class="panel-title">⚡ 协同效果</div>';
-    const active=units.filter(u=>u.unlocked);
-    TEAM_SYNERGIES.forEach(syn=>{
-      const active2=syn.req(active);
-      const row=document.createElement('div');
-      row.style.cssText='display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bd);font-size:.64rem;opacity:'+(active2?'1':'0.4')+';';
-      row.innerHTML='<span style="font-size:1rem">'+syn.icon+'</span>'+
-        '<div style="flex:1"><div style="font-weight:700;color:'+(active2?'var(--jade2)':'var(--tx3)')+'">'+syn.name+'</div>'+
-        '<div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+syn.desc+'</div></div>'+
-        (active2?'<span style="color:var(--jade2);font-size:.6rem">激活</span>':'');
-      synPanel.appendChild(row);
-    });
-    list.appendChild(synPanel);
-  }
-
-  // Unit cards
-  if(typeof UNIT_ROLES!=='undefined'){
-    UNIT_ROLES.forEach(role=>{
-      const unit=units.find(u=>u.roleId===role.id||u.role===role.role);
-      const unlocked=unit&&unit.unlocked;
-      const req=UNIT_UNLOCK_REQS&&(UNIT_UNLOCK_REQS[role.id]||UNIT_UNLOCK_REQS[role.role]);
-      const card=document.createElement('div');
-      card.className='panel';
-      card.style.opacity=unlocked?'1':'0.6';
-      const headerHTML='<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px;">'+
-        '<span style="font-size:1.5rem">'+role.icon+'</span>'+
-        '<div style="flex:1">'+
-          '<div style="font-family:\"Cormorant Garamond\",serif;font-size:.9rem;font-weight:700;color:"+role.color+">'+role.name+'</div>'+
-          '<div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+role.desc+'</div>'+
-          '<div style="font-size:.52rem;color:var(--violet2);margin-top:2px">被动: '+role.passive+'</div>'+
-        '</div>'+
-        (unlocked?'<div style="font-size:.56rem;padding:2px 8px;background:rgba(58,158,110,.1);border:1px solid var(--jade);border-radius:4px;color:var(--jade2)">激活</div>':
-          req?'<div style="font-size:.52rem;color:var(--tx3)">'+req.desc+'</div>':'')+'</div>';
-      card.innerHTML=headerHTML;
-      if(unlocked&&unit){
-        // IN BATTLE badge
-        const battleBadge=document.createElement('div');
-        battleBadge.style.cssText='display:flex;align-items:center;gap:6px;margin-bottom:8px;';
-        const bb=document.createElement('div');
-        bb.style.cssText='font-size:.52rem;padding:2px 8px;background:rgba(58,158,110,.15);border:1px solid var(--jade);border-radius:4px;color:var(--jade2);letter-spacing:.05em;';
-        bb.textContent='⚔ 战斗中';
-        battleBadge.appendChild(bb);
-        if(unit.isMainChar){
-          const mc=document.createElement('div');
-          mc.style.cssText='font-size:.52rem;padding:2px 8px;background:rgba(201,168,76,.1);border:1px solid var(--gold);border-radius:4px;color:var(--gold2);';
-          mc.textContent='★ 主角';
-          battleBadge.appendChild(mc);
-        }
-        card.appendChild(battleBadge);
-        // Stats
-        const statsDiv=document.createElement('div');
-        statsDiv.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:3px;font-size:.58rem;margin-bottom:8px;';
-        const uAtk=typeof unitAtk==='function'?unitAtk(unit):Math.floor(10*role.baseAtk);
-        const uSpd=typeof unitSpd==='function'?unitSpd(unit):(1.0*role.baseSpd).toFixed(1);
-        const s=[['ATK',fmt(uAtk),'var(--ember2)'],['SPD',typeof uSpd==='number'?uSpd.toFixed(1):uSpd,'var(--jade2)'],['CRIT',Math.floor(unitCrit?unitCrit(unit):5*role.baseCrit)+'%','var(--gold2)'],['CDmg',Math.floor(unitCritDmg?unitCritDmg(unit):200*role.baseCdmg)+'%','var(--ember)']];
-        s.forEach(([k,v,c])=>{ statsDiv.innerHTML+='<div style="background:var(--s2);border-radius:4px;padding:4px 5px;text-align:center"><div style="font-size:.44rem;color:var(--tx3)">'+k+'</div><div style="color:'+c+';font-weight:700">'+v+'</div></div>'; });
-        card.appendChild(statsDiv);
-        // Unit gear summary
-        if(unit.gear){
-          const gearDiv=document.createElement('div');
-          gearDiv.style.cssText='display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:6px;';
-          ['weapon','head','body','legs'].forEach(slot=>{
-            const g=unit.gear[slot];
-            const sl=document.createElement('div');
-            sl.style.cssText='background:var(--s2);border:1px solid var(--bd);border-radius:5px;padding:4px;text-align:center;cursor:pointer;font-size:.5rem;';
-            const SICONS={weapon:'⚔',head:'🪖',body:'🧥',legs:'👖'};
-            sl.innerHTML=SICONS[slot]+'<br><span style="color:var(--tx3)">'+(g&&g.pathId?'Lv'+g.pathLv:'空')+'</span>';
-            sl.title=(g&&g.pathId?g.name:'未选路线')+' — 点击强化';
-            sl.onclick=()=>openUnitGearModal(unit,slot);
-            gearDiv.appendChild(sl);
-          });
-          card.appendChild(gearDiv);
-        }
-      } else if(!unlocked&&req){
-        const unlockBtn=document.createElement('button');
-        const canUnlock=G.best>=req.stage&&G.gold>=req.gold;
-        unlockBtn.style.cssText='width:100%;padding:9px;background:'+(canUnlock?'rgba(201,168,76,.1)':'rgba(100,100,120,.05)')+';border:1px solid '+(canUnlock?'var(--gold)':'var(--bd2)')+';border-radius:7px;color:'+(canUnlock?'var(--gold2)':'var(--tx3)')+';font-family:"JetBrains Mono",monospace;font-size:.65rem;cursor:'+(canUnlock?'pointer':'not-allowed')+';';
-        unlockBtn.textContent='解锁 ('+fmt(req.gold)+'金)';
-        if(canUnlock) unlockBtn.onclick=()=>{ tryUnlockUnit(role.id); renderTeam(); };
-        card.appendChild(unlockBtn);
-      }
-      list.appendChild(card);
-    });
+    grid.appendChild(slot);
   }
 }
+
+function renderRosterList() {
+  const list=$('roster-list'); if(!list) return;
+  list.innerHTML='';
+  const inv=G.rosterInventory||[];
+  // Get unique chars + count
+  const charMap={};
+  inv.forEach(id=>{ charMap[id]=(charMap[id]||0)+1; });
+  const chars=Object.keys(charMap).map(id=>({ ...ROSTER.find(c=>c.id===id), count:charMap[id] })).filter(c=>c.id);
+  // Sort by rarity desc
+  chars.sort((a,b)=>b.rar-a.rar);
+  $('roster-count').textContent=chars.length;
+
+  if(!chars.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='grid-column:1/-1;font-size:.6rem;color:var(--tx3);font-style:italic;padding:10px;text-align:center;';
+    empty.textContent='去抽卡获得角色';
+    list.appendChild(empty); return;
+  }
+
+  chars.forEach(char=>{
+    const rc=RARITY_CONFIG[char.rar];
+    const cls=CLASSES[char.cls];
+    const ele=ELEMENTS[char.ele];
+    const stars=getCharStars(char.id);
+    const onBoard=(G.board||[]).includes(char.id);
+    const card=document.createElement('div');
+    card.style.cssText='border-radius:8px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+';padding:7px 5px;text-align:center;cursor:pointer;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.12)':'var(--s1)')+';transition:all .15s;position:relative;';
+    card.innerHTML=
+      '<div style="font-size:1.2rem">'+char.icon+'</div>'+
+      '<div style="font-size:.52rem;font-weight:700;color:'+rc.color+';margin-top:2px;line-height:1.2">'+char.name+'</div>'+
+      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+cls.name+' '+ele.icon+ele.name+'</div>'+
+      '<div style="font-size:.48rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>'+
+      (char.count>1?'<div style="position:absolute;top:3px;right:4px;font-size:.44rem;color:var(--tx3)">×'+char.count+'</div>':'')+
+      (onBoard?'<div style="font-size:.44rem;color:var(--jade2);margin-top:2px">出战中</div>':'');
+    card.onclick=()=>onBoard?removeCharFromBoard(char.id):addToBoard(char.id);
+    card.title=char.passive;
+    list.appendChild(card);
+  });
+}
+
+function renderSynBadges() {
+  const tags=$('syn-tags'); if(!tags) return;
+  tags.innerHTML='';
+  const syns=G._activeSynList||[];
+  if(!syns.length){
+    tags.innerHTML='<span style="font-size:.5rem;color:var(--tx3);font-style:italic">摆放角色以激活羁绊</span>';
+    return;
+  }
+  syns.forEach(syn=>{
+    const b=document.createElement('div');
+    b.style.cssText='font-size:.5rem;padding:2px 6px;border-radius:4px;border:1px solid var(--bd2);background:var(--s2);color:var(--gold2);white-space:nowrap;';
+    b.textContent=syn.icon+' '+syn.name;
+    b.title=syn.desc;
+    tags.appendChild(b);
+  });
+  // Show class/element counts
+  const counts=document.createElement('div');
+  counts.style.cssText='display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;';
+  const cc=G._clsCounts||{}, ec=G._eleCounts||{};
+  Object.entries(cc).forEach(([cls,n])=>{
+    const d=CLASSES[cls]; if(!d) return;
+    const sp=document.createElement('span');
+    sp.style.cssText='font-size:.46rem;color:var(--tx3);';
+    sp.textContent=d.icon+'×'+n;
+    counts.appendChild(sp);
+  });
+  Object.entries(ec).forEach(([ele,n])=>{
+    const d=ELEMENTS[ele]; if(!d) return;
+    const sp=document.createElement('span');
+    sp.style.cssText='font-size:.46rem;color:var(--tx3);';
+    sp.textContent=d.icon+'×'+n;
+    counts.appendChild(sp);
+  });
+  tags.appendChild(counts);
+}
+
+function addToBoard(charId) {
+  if(!G.board) G.board=Array(6).fill(null);
+  const emptyIdx=G.board.indexOf(null);
+  if(emptyIdx===-1){ notif('阵容已满 (6/6)，先移除一名角色'); return; }
+  if(G.board.includes(charId)){ notif('该角色已在阵容中'); return; }
+  G.board[emptyIdx]=charId;
+  if(typeof calcBoardSynergies==='function') calcBoardSynergies();
+  updateStats(); saveGame(); renderTeam();
+  const c=ROSTER.find(x=>x.id===charId);
+  if(c) notif(c.icon+' '+c.name+' 上阵！');
+}
+
+function removeFromBoard(slotIdx) {
+  if(!G.board) return;
+  const charId=G.board[slotIdx]; if(!charId) return;
+  G.board[slotIdx]=null;
+  if(typeof calcBoardSynergies==='function') calcBoardSynergies();
+  updateStats(); saveGame(); renderTeam();
+  const c=ROSTER.find(x=>x.id===charId);
+  if(c) notif(c.icon+' '+c.name+' 下场');
+}
+
+function removeCharFromBoard(charId) {
+  if(!G.board) return;
+  const idx=G.board.indexOf(charId);
+  if(idx>=0) removeFromBoard(idx);
+}
+
+function hexToRgb(hex) {
+  const r=parseInt(hex.slice(1,3),16);
+  const g=parseInt(hex.slice(3,5),16);
+  const b=parseInt(hex.slice(5,7),16);
+  return r+','+g+','+b;
+}
+
+
+// ── UNIT GEAR MODAL ──────────────────────────────────
+function openUnitGearModal(unit, slot) {
+  if(!unit||!unit.gear) return;
+  const g=unit.gear[slot];
+  const SNAMES={weapon:'武器',head:'头部',body:'身体',legs:'腿部'};
+  const SICONS={weapon:'⚔',head:'🪖',body:'🧥',legs:'👖'};
+  $('m-title').textContent=unit.name+' — '+SICONS[slot]+SNAMES[slot];
+  $('m-extra').textContent='';
+  const body=$('m-body'); body.innerHTML='';
+  const btns=$('m-btns'); btns.innerHTML='';
+
+  if(!g.pathId){
+    // Show path choices
+    const hd=document.createElement('div');
+    hd.style.cssText='font-size:.6rem;color:var(--gold);margin-bottom:8px;';
+    hd.textContent='选择强化路线：';
+    body.appendChild(hd);
+    const paths=GEAR_PATHS[slot]||[];
+    paths.forEach(path=>{
+      const mat=UPGRADE_MATS[path.mat]||{icon:'?',name:'?'};
+      const btn=document.createElement('button');
+      btn.style.cssText='width:100%;background:var(--s2);border:1px solid var(--bd2);border-radius:7px;padding:9px;cursor:pointer;text-align:left;margin-bottom:5px;display:flex;align-items:center;gap:8px;';
+      btn.innerHTML='<span style="font-size:1.1rem">'+path.icon+'</span><div><div style="font-size:.7rem;font-weight:700;color:var(--tx)">'+path.name+'</div><div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+path.desc+'</div><div style="font-size:.52rem;color:'+mat.color+';margin-top:2px">消耗：'+mat.icon+' '+mat.name+'</div></div>';
+      btn.onclick=()=>{ g.pathId=path.id; g.name=path.name; recomputeGearStats(g); recalcEq(); closeModal(); renderTeam(); updateStats(); };
+      body.appendChild(btn);
+    });
+  } else {
+    // Show upgrade info
+    const paths=GEAR_PATHS[slot]||[];
+    const path=paths.find(p=>p.id===g.pathId);
+    if(path){
+      const lv=g.pathLv||0;
+      const nextLv=path.levels[lv];
+      const mat=UPGRADE_MATS[path.mat]||{icon:'?',name:'?'};
+      const have=G.upgMats[path.mat]||0;
+      const info=document.createElement('div');
+      info.style.cssText='font-size:.66rem;line-height:1.8;color:var(--tx3);margin-bottom:10px;';
+      info.innerHTML='<b style="color:var(--gold)">'+path.icon+' '+path.name+'</b><br>等级: '+lv+(nextLv?'→'+(lv+1):' (满级)')+'<br>属性: ATK+'+Math.floor((g.totalAtk||0))+' SPD+'+(g.totalSpd||0)+' Crit+'+(g.totalCrit||0)+'%<br>'+
+        (nextLv?'升级费用: '+mat.icon+' '+nextLv.cost+' '+mat.name+'<br>拥有: '+have:'');
+      body.appendChild(info);
+      if(nextLv&&have>=nextLv.cost){
+        const upBtn=document.createElement('button');
+        upBtn.style.cssText='width:100%;padding:10px;background:rgba(58,158,110,.1);border:1px solid var(--jade);border-radius:7px;color:var(--jade2);font-family:"JetBrains Mono",monospace;font-size:.68rem;cursor:pointer;margin-bottom:5px;';
+        upBtn.textContent='⬆ 强化';
+        upBtn.onclick=()=>{ G.upgMats[path.mat]-=nextLv.cost; g.pathLv=(g.pathLv||0)+1; recomputeGearStats(g); recalcEq(); updateStats(); openUnitGearModal(unit,slot); };
+        body.appendChild(upBtn);
+        const bulkBtn=document.createElement('button');
+        bulkBtn.style.cssText='width:100%;padding:8px;background:rgba(201,168,76,.1);border:1px solid var(--goldd);border-radius:7px;color:var(--gold2);font-family:"JetBrains Mono",monospace;font-size:.62rem;cursor:pointer;';
+        bulkBtn.textContent='全部强化';
+        bulkBtn.onclick=()=>{ let n=0; while(true){ const lv=g.pathLv||0; const nd=path.levels[lv]; if(!nd||( G.upgMats[path.mat]||0)<nd.cost||n>200) break; G.upgMats[path.mat]-=nd.cost; g.pathLv=lv+1; n++; } recomputeGearStats(g); recalcEq(); updateStats(); openUnitGearModal(unit,slot); };
+        body.appendChild(bulkBtn);
+      }
+    }
+  }
+  const cancel=document.createElement('button'); cancel.className='m-btn m-no'; cancel.textContent='关闭'; cancel.onclick=closeModal;
+  btns.appendChild(cancel);
+  $('overlay').classList.add('on');
+}
+
+// ── SETTINGS RENDER ──────────────────────────────────
+function renderSettings() {
+  // Personal bests
+  const pb=$('personal-bests-list'); if(!pb) return;
+  pb.innerHTML='';
+  if(typeof LEADERBOARD_CATEGORIES!=='undefined'){
+    LEADERBOARD_CATEGORIES.forEach(c=>{
+      const val=(G.personalBests&&G.personalBests[c.id])||c.getValue();
+      const row=document.createElement('div'); row.className='data-row';
+      row.innerHTML='<span class="dk">'+c.icon+' '+c.name+'</span><span class="dv">'+fmt(val)+'</span>';
+      pb.appendChild(row);
+    });
+  }
+  // Game info
+  $('info-auto-upg')&&($('info-auto-upg').textContent=fmt(G.autoUpgradeCount||0));
+  $('info-dungeons')&&($('info-dungeons').textContent=G.totalDungeons||0);
+  $('info-wboss')&&($('info-wboss').textContent=G.weeklyBossKills||0);
+  $('info-titles')&&($('info-titles').textContent=(G.titlesEarned||[]).length);
+  $('info-runes')&&($('info-runes').textContent=(G.runesEquipped||[]).length+'/6');
+  // Play time
+  const mins=Math.floor((Date.now()-(G.startTime||Date.now()))/60000);
+  $('total-play-time')&&($('total-play-time').textContent=mins>=60?Math.floor(mins/60)+'h'+mins%60+'m':mins+'min');
+}
+
+function confirmReset() {
+  openModal('⚠ 重置存档',
+    '确定要重置所有进度吗？\n\n所有等级、装备、材料、金币\n全部清空，无法恢复！',
+    [{label:'确认重置',cls:'m-del',cb:()=>{ localStorage.removeItem('chronicle_v2'); closeModal(); location.reload(); }},
+     {label:'取消',cls:'m-no',cb:closeModal}]);
+}
+
+function closeModal() { $('overlay').classList.remove('on'); $('m-body').innerHTML=''; $('m-btns').innerHTML=''; }
+
+// ── RUNE RENDER ──────────────────────────────────────
+function renderRune() {
+  // Equipped runes
+  const eq=$('rune-equipped'); if(!eq) return;
+  eq.innerHTML='';
+  const equipped=G.runesEquipped||[];
+  for(let i=0;i<RUNE_SLOTS;i++){
+    const slot=document.createElement('div');
+    slot.style.cssText='width:44px;height:44px;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.9rem;cursor:pointer;border:1px solid;transition:all .15s;';
+    if(i<equipped.length){
+      const rune=RUNES.find(r=>r.id===equipped[i]);
+      if(rune){
+        slot.style.borderColor='var(--violet)';
+        slot.style.background='rgba(139,92,246,.1)';
+        slot.innerHTML='<div>'+rune.icon+'</div><div style="font-size:.38rem;color:var(--violet2)">'+rune.name.slice(0,4)+'</div>';
+        slot.title=rune.name+': '+rune.desc;
+        slot.onclick=(()=>{const id=equipped[i];return()=>unequipRune(i);})();
+      }
+    } else {
+      slot.style.borderColor='var(--bd2)';
+      slot.style.borderStyle='dashed';
+      slot.style.color='var(--tx3)';
+      slot.innerHTML='<div style="font-size:.6rem">+</div><div style="font-size:.38rem">空槽</div>';
+    }
+    eq.appendChild(slot);
+  }
+  // Rune inventory
+  const list=$('rune-list'); if(!list) return;
+  list.innerHTML='';
+  const inv=G.runeInventory||[];
+  if(!inv.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='font-size:.66rem;color:var(--tx3);font-style:italic;padding:8px;';
+    empty.textContent='击败Boss获得符文';
+    list.appendChild(empty); return;
+  }
+  // Group by id, show count
+  const counts={};
+  inv.forEach(id=>counts[id]=(counts[id]||0)+1);
+  Object.entries(counts).forEach(([id,cnt])=>{
+    const rune=RUNES.find(r=>r.id===id); if(!rune) return;
+    const canEquip=(G.runesEquipped||[]).length<RUNE_SLOTS&&!(G.runesEquipped||[]).includes(id);
+    const card=document.createElement('div');
+    card.style.cssText='display:flex;align-items:center;gap:9px;padding:9px 10px;background:var(--s1);border:1px solid var(--bd2);border-radius:8px;';
+    card.innerHTML='<div style="font-size:1.3rem">'+rune.icon+'</div>'+
+      '<div style="flex:1"><div style="font-size:.7rem;font-weight:700">'+rune.name+' <span style="color:var(--tx3);font-size:.56rem">×'+cnt+'</span></div>'+
+      '<div style="font-size:.56rem;color:var(--tx3);margin-top:1px">'+rune.desc+'</div>'+
+      '<div style="font-size:.5rem;color:var(--violet2);margin-top:1px">T'+rune.tier+'</div></div>';
+    if(canEquip){
+      const btn=document.createElement('button');
+      btn.style.cssText='padding:6px 10px;background:rgba(139,92,246,.1);border:1px solid var(--violet);border-radius:6px;color:var(--violet2);font-family:"JetBrains Mono",monospace;font-size:.6rem;cursor:pointer;';
+      btn.textContent='装备';
+      btn.onclick=()=>equipRune(id);
+      card.appendChild(btn);
+    }
+    list.appendChild(card);
+  });
+}
+
+function equipRune(id) {
+  if(!G.runesEquipped) G.runesEquipped=[];
+  if(G.runesEquipped.length>=RUNE_SLOTS){ notif('符文槽已满'); return; }
+  G.runesEquipped.push(id);
+  // Remove one from inventory
+  const idx=(G.runeInventory||[]).indexOf(id);
+  if(idx>=0) G.runeInventory.splice(idx,1);
+  // Apply rune effect
+  const rune=RUNES.find(r=>r.id===id);
+  if(rune&&rune.effect) rune.effect();
+  updateStats(); renderRune();
+  log('✨ 装备符文：'+rune.name,'ev');
+}
+
+function unequipRune(slotIdx) {
+  if(!G.runesEquipped||slotIdx>=G.runesEquipped.length) return;
+  const id=G.runesEquipped[slotIdx];
+  const rune=RUNES.find(r=>r.id===id);
+  G.runesEquipped.splice(slotIdx,1);
+  if(!G.runeInventory) G.runeInventory=[];
+  G.runeInventory.push(id);
+  // Recalc all rune bonuses from scratch
+  recalcRuneBonuses();
+  updateStats(); renderRune();
+  log('✨ 卸下符文：'+(rune?rune.name:id),'sys');
+}
+
+function recalcRuneBonuses() {
+  // Reset
+  G.runeAtk=0; G.runeSpd=0; G.runeCrit=0; G.runeCdmg=0;
+  G.runeGoldMult=0; G.runeTruePct=0; G.runeComboBonus=false;
+  G.runeTime=0; G.runeMythicMult=0; G.runePrestigeMult=1;
+  // Re-apply all equipped runes
+  (G.runesEquipped||[]).forEach(id=>{
+    const rune=RUNES.find(r=>r.id===id);
+    if(rune&&rune.effect) rune.effect();
+  });
+}
+
+// ── AUTO UPGRADE ──────────────────────────────────────
+function setAutoUpgrade(mode) {
+  G.autoUpgradeMode=mode;
+  document.querySelectorAll('.au-btn').forEach(b=>b.classList.remove('on'));
+  const btn=$('au-'+mode); if(btn) btn.classList.add('on');
+  notif('自动强化：'+AUTO_UPGRADE_MODES.find(m=>m.id===mode)?.name||mode);
+}
+
+function updateAutoUpgUI() {
+  document.querySelectorAll('.au-btn').forEach(b=>b.classList.remove('on'));
+  const btn=$('au-'+(G.autoUpgradeMode||'off')); if(btn) btn.classList.add('on');
+  $('au-count')&&($('au-count').textContent=G.autoUpgradeCount||0);
+}
+
+// ── TITLE DISPLAY ─────────────────────────────────────
+function updateActiveTitle() {
+  const el=$('active-title'); if(!el) return;
+  if(G.activeTitle){
+    const t=typeof TITLES!=='undefined'&&TITLES.find(x=>x.id===G.activeTitle);
+    el.textContent=t?t.icon+' '+t.name:'';
+  } else { el.textContent=''; }
+}
+
+// ── PRESTIGE RENDER ───────────────────────────────────
+function renderPrestige() {
+  const sec=$('prestige-section'); if(!sec) return;
+  sec.style.display = G.best>=500?'block':'none';
+  if(G.best<500) return;
+  const n=G.prestigeCount||0;
+  const bonus=PRESTIGE_BONUSES[Math.min(n,PRESTIGE_BONUSES.length-1)];
+  const desc=`转生次数：${n}次\n当前倍率：×${G.prestigeMult||1}\n\n下次转生奖励：${bonus.desc}\n\n注意：等级/阶段/ATK将重置\n装备强化、觉醒、祈愿全部保留`;
+  $('prestige-desc').textContent=desc;
+}
+
+function confirmPrestige() {
+  if(!canPrestige()){ notif('需要到达Stage 500'); return; }
+  const n=G.prestigeCount||0;
+  const bonus=PRESTIGE_BONUSES[Math.min(n,PRESTIGE_BONUSES.length-1)];
+  openModal('🔱 转生确认',
+    `转生后获得：${bonus.desc}\n\n等级、阶段、ATK将重置\n装备等级和祈愿全部保留\n\n确定转生吗？`,
+    [{label:'确认转生',cls:'m-ok',cb:()=>{doPrestige();closeModal();renderPrestige();updateStats();}},
+     {label:'取消',cls:'m-no',cb:closeModal}]);
+}
+
+// ── ZONE BADGE UPDATE ─────────────────────────────────
+function updateZoneBadge() {
+  const z=$('zone-badge'); if(!z) return;
+  if(typeof getZone==='function'){
+    const zone=getZone(G.stage);
+    z.textContent=zone.icon+' '+zone.name;
+  }
+}
+
+// ── START ────────────────────────────────────────────────────
+
+
+
+// ── LOGIN SYSTEM ─────────────────────────────────────
+const AUTH_KEY = 'chronicle_auth';
+
+function getAccounts() {
+  try{ return JSON.parse(localStorage.getItem(AUTH_KEY)||'{}'); }
+  catch(e){ return {}; }
+}
+
+function saveAccounts(accounts) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify(accounts));
+}
+
+function getSaveKey(username) {
+  return 'chronicle_v2_' + username.toLowerCase();
+}
+
+function showLogin() {
+  document.getElementById('login-form').style.display='block';
+  document.getElementById('register-form').style.display='none';
+  document.getElementById('login-error').textContent='';
+}
+
+function showRegister() {
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('register-form').style.display='block';
+  document.getElementById('reg-error').textContent='';
+}
+
+function simpleHash(str) {
+  // Simple hash for password storage (client-side only)
+  let hash = 0;
+  for(let i=0;i<str.length;i++){
+    const c=str.charCodeAt(i);
+    hash=((hash<<5)-hash)+c; hash|=0;
+  }
+  return hash.toString(36);
+}
+
+function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const errEl = document.getElementById('login-error');
+
+  if(!user||!pass){ errEl.textContent='请输入账号和密码'; return; }
+
+  const accounts = getAccounts();
+  const account = accounts[user.toLowerCase()];
+
+  if(!account){ errEl.textContent='账号不存在，请先注册'; return; }
+  if(account.hash !== simpleHash(pass)){ errEl.textContent='密码错误'; return; }
+
+  // Login success
+  window._currentUser = user.toLowerCase();
+  window._saveKey = getSaveKey(user);
+  enterGame(user);
+}
+
+function doRegister() {
+  const user = document.getElementById('reg-user').value.trim();
+  const pass = document.getElementById('reg-pass').value;
+  const pass2 = document.getElementById('reg-pass2').value;
+  const errEl = document.getElementById('reg-error');
+
+  if(!user||user.length<4||user.length>16){ errEl.textContent='账号需4-16个字符'; return; }
+  if(!/^[a-zA-Z0-9_]+$/.test(user)){ errEl.textContent='账号只能包含字母数字下划线'; return; }
+  if(!pass||pass.length<6){ errEl.textContent='密码至少6位'; return; }
+  if(pass!==pass2){ errEl.textContent='两次密码不一致'; return; }
+
+  const accounts = getAccounts();
+  if(accounts[user.toLowerCase()]){ errEl.textContent='账号已存在'; return; }
+
+  // Register
+  accounts[user.toLowerCase()] = { username:user, hash:simpleHash(pass), created:Date.now() };
+  saveAccounts(accounts);
+
+  window._currentUser = user.toLowerCase();
+  window._saveKey = getSaveKey(user);
+  enterGame(user);
+}
+
+function enterGame(username) {
+  // Hide login screen
+  const ls = document.getElementById('login-screen');
+  ls.style.opacity='0';
+  ls.style.transition='opacity .4s';
+  setTimeout(()=>{ ls.style.display='none'; }, 400);
+
+  // Update save key to be user-specific
+  // Override the SK constant used in saveGame/loadGame
+  window._overrideSaveKey = window._saveKey;
+
+  // Show username in header
+  const saveTime = document.getElementById('save-time');
+  if(saveTime) saveTime.textContent = username;
+
+  if(!G.startTime) G.startTime=Date.now();
+  initGame();
+}
+
+function doLogout() {
+  saveGame();
+  window._currentUser = null;
+  window._overrideSaveKey = null;
+  // Reset game state
+  G = newGame();
+  T = TALENTS[0];
+  // Show login
+  const ls = document.getElementById('login-screen');
+  ls.style.display='flex'; ls.style.opacity='1';
+  document.getElementById('login-user').value='';
+  document.getElementById('login-pass').value='';
+  document.getElementById('login-error').textContent='';
+  showLogin();
+}
+
+window.addEventListener('load', ()=>{
+  if(!G.startTime) G.startTime=Date.now();
+  initGame();
+});
+</script>
+</body>
+</html>'<div><div style="font-size:.9rem;font-weight:700;color:var(--gold)">角色祈愿</div>'+
+      '<div style="font-size:.54rem;color:var(--tx3);margin-top:1px">50+角色 · 职业+元素羁绊 · 5★保底90抽</div></div>'+
+    '</div>'+
+    '<div style="font-size:.54rem;color:var(--tx3);margin-bottom:8px">'+
+      '5★: 1% · 4★: 7% · 3★: 17% · 保底: <span style="color:var(--gold)">'+(G.rosterPity||0)+'/90</span></div>'+
+    '<div style="display:flex;gap:6px">'+
+      '<button onclick="pullAndShow('roster',false)" style="flex:1;padding:9px;border-radius:7px;border:1px solid '+(canS?'var(--gold)':'var(--bd2)')+';background:'+(canS?'rgba(201,168,76,.1)':'rgba(100,100,120,.05)')+';color:'+(canS?'var(--gold2)':'var(--tx3)')+';font-family:'JetBrains Mono',monospace;font-size:.62rem;cursor:'+(canS?'pointer':'not-allowed')+'">单抽<br><span style="font-size:.52rem">💠160</span></button>'+
+      '<button onclick="pullAndShow('roster',true)"  style="flex:2;padding:9px;border-radius:7px;border:1px solid '+(canM?'var(--violet)':'var(--bd2)')+';background:'+(canM?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)')+';color:'+(canM?'var(--violet2)':'var(--tx3)')+';font-family:'JetBrains Mono',monospace;font-size:.62rem;cursor:'+(canM?'pointer':'not-allowed')+'">十连<br><span style="font-size:.52rem">💠1600</span></button>'+
+    '</div>'+
+    '<div style="font-size:.5rem;color:var(--tx3);margin-top:7px;text-align:center">已有角色: '+Object.keys((G.rosterInventory||[]).reduce((m,id)=>{m[id]=1;return m;},{})).length+' / '+ROSTER.length+'</div>';
+  list.appendChild(rosterCard);
+
+  // ── DIVIDER ──────────────────────────────────────────
+  const div=document.createElement('div');
+  div.style.cssText='font-size:.54rem;color:var(--tx3);margin:6px 0 4px;letter-spacing:.08em;text-align:center;';
+  div.textContent='── 其他祈愿 ──';
+  list.appendChild(div);
+
+  GACHA_BANNERS.forEach(banner=>{
+    const card=document.createElement('div');
+    card.style.cssText='background:var(--s1);border:1px solid var(--bd2);border-radius:10px;padding:12px;';
+    const singleCost=banner.cost.single;
+    const multiCost=banner.cost.multi;
+    const canSingle=(G.gachaCrystals||0)>=singleCost;
+    const canMulti=(G.gachaCrystals||0)>=multiCost;
+    card.innerHTML=`
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:1.5rem">${banner.icon}</span>
+        <div>
+          <div style="font-family:serif;font-size:.9rem;font-weight:700;color:var(--gold)">${banner.name}</div>
+          <div style="font-size:.56rem;color:var(--tx3);margin-top:1px">${banner.desc}</div>
+        </div>
+      </div>
+      <div style="font-size:.56rem;color:var(--tx3);margin-bottom:8px">
+        SSR ${banner.rates.ssr}% · SR ${banner.rates.sr}% · 保底90抽
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="pullAndShow('${banner.id}',false)" style="flex:1;padding:9px;border-radius:7px;border:1px solid ${canSingle?'var(--gold)':'var(--bd2)'};background:${canSingle?'rgba(201,168,76,.1)':'rgba(100,100,120,.05)'};color:${canSingle?'var(--gold2)':'var(--tx3)'};font-family:'JetBrains Mono',monospace;font-size:.6rem;cursor:${canSingle?'pointer':'not-allowed'}">
+          单抽<br><span style="font-size:.52rem">💠${singleCost}</span>
+        </button>
+        <button onclick="pullAndShow('${banner.id}',true)" style="flex:2;padding:9px;border-radius:7px;border:1px solid ${canMulti?'var(--violet)':'var(--bd2)'};background:${canMulti?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)'};color:${canMulti?'var(--violet2)':'var(--tx3)'};font-family:'JetBrains Mono',monospace;font-size:.6rem;cursor:${canMulti?'pointer':'not-allowed'}">
+          十连<br><span style="font-size:.52rem">💠${multiCost}</span>
+        </button>
+      </div>`;
+    list.appendChild(card);
+  });
+  // How to earn crystals info
+  const info=document.createElement('div');
+  info.style.cssText='background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;font-size:.58rem;color:var(--tx3);line-height:1.7;';
+  info.innerHTML='<div style="color:var(--gold);margin-bottom:4px">💠 如何获得传说水晶</div>击败Boss获得水晶<br>每10关Boss额外奖励<br>购买月卡（即将推出）';
+  list.appendChild(info);
+}
+
+function pullAndShow(bannerId, multi) {
+  // Roster pull
+  if(bannerId==='roster'){
+    const results=pullRoster(multi);
+    if(!results.length) return;
+    showPullResults(results);
+    return;
+  }
+  // Legacy item pull
+  const results=doGachaPull(bannerId, multi);
+  if(!results.length) return;
+  const hasSSR=results.some(r=>r.rar==='mythic');
+  const body=results.map(r=>`[${RNAME[r.rar]||r.rar}] ${r.icon} ${r.name}`).join(' / ');
+  openModal(hasSSR?'🌟 传说级获得！':'祈愿结果', body,
+    [{label:'确认',cls:'m-ok',cb:()=>{closeModal();renderGacha();}}]);
+  if(hasSSR){ spawnParts('legendary'); }
+  updateStats();
+}
+
+function showPullResults(results) {
+  const body=$('m-body'); if(!body) return;
+  $('m-title').textContent='祈愿结果 ×'+results.length;
+  body.innerHTML='';
+  const grid=document.createElement('div');
+  grid.style.cssText='display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px 0;';
+  results.forEach(char=>{
+    const rc=RARITY_CONFIG[char.rar];
+    const cls=CLASSES[char.cls]||{icon:'?',name:'?'};
+    const ele=ELEMENTS[char.ele]||{icon:'?',name:'?'};
+    const card=document.createElement('div');
+    card.style.cssText='border:1px solid '+rc.color+';border-radius:8px;padding:8px 4px;text-align:center;background:rgba('+hexToRgb(rc.color)+',.08);';
+    card.innerHTML='<div style="font-size:1.4rem">'+char.icon+'</div>'+
+      '<div style="font-size:.56rem;font-weight:700;color:'+rc.color+';margin-top:2px">'+char.name+'</div>'+
+      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
+      '<div style="font-size:.5rem;color:'+rc.color+'">'+rc.name+'</div>';
+    grid.appendChild(card);
+  });
+  body.appendChild(grid);
+  const $m=$('m-btns'); $m.innerHTML='';
+  const ok=document.createElement('button'); ok.className='m-btn m-ok'; ok.textContent='确认';
+  ok.onclick=()=>{ closeModal(); renderGacha(); if(document.getElementById('team-page').classList.contains('on')) renderTeam(); };
+  $m.appendChild(ok);
+  $('overlay').classList.add('on');
+  const hasFive=results.some(r=>r.rar===5);
+  if(hasFive){ spawnParts('legendary'); }
+  updateStats();
+}
+
+function openModal(title, body, btnsArr) {
+  $('m-title').textContent=title;
+  $('m-body').textContent=body;
+  $('m-extra').textContent='';
+  const bc=$('m-btns'); bc.innerHTML='';
+  (btnsArr||[]).forEach(({label,cls,cb})=>{
+    const b=document.createElement('button'); b.className='m-btn '+cls; b.textContent=label; b.onclick=cb; bc.appendChild(b);
+  });
+  $('overlay').classList.add('on');
+}
+// ── MAT SINKS RENDER ─────────────────────────────────
+function renderMatSinks() {
+  const list=$('mat-sink-list'); if(!list) return;
+  list.innerHTML='';
+  if(typeof MAT_SINKS==='undefined') return;
+  MAT_SINKS.forEach(sink=>{
+    const canAfford=Object.entries(sink.cost).every(([k,v])=>(G.upgMats[k]||0)>=v);
+    const costStr=Object.entries(sink.cost).map(([k,v])=>(UPGRADE_MATS[k]?.icon||k)+v).join(' ');
+    const card=document.createElement('div');
+    card.style.cssText='display:flex;align-items:center;gap:8px;padding:8px 9px;background:var(--s1);border:1px solid '+(canAfford?'var(--violet)':'var(--bd2)')+';border-radius:7px;';
+    card.innerHTML='<span style="font-size:1.1rem">'+sink.icon+'</span>'+
+      '<div style="flex:1"><div style="font-size:.68rem;font-weight:700">'+sink.n+'</div>'+
+      '<div style="font-size:.54rem;color:var(--tx3);margin-top:1px">'+sink.desc+'</div>'+
+      '<div style="font-size:.52rem;color:var(--violet2);margin-top:1px">消耗: '+costStr+'</div></div>';
+    const btn=document.createElement('button');
+    btn.style.cssText='padding:6px 9px;border-radius:5px;border:1px solid '+(canAfford?'var(--violet)':'var(--bd2)')+';background:'+(canAfford?'rgba(139,92,246,.1)':'rgba(100,100,120,.05)')+';color:'+(canAfford?'var(--violet2)':'var(--tx3)')+';font-family:"JetBrains Mono",monospace;font-size:.58rem;cursor:'+(canAfford?'pointer':'not-allowed')+';';
+    btn.textContent='炼制';
+    if(canAfford) btn.onclick=()=>{ sink.apply(); Object.entries(sink.cost).forEach(([k,v])=>{ G.upgMats[k]-=v; }); updateStats(); renderMatSinks(); };
+    card.appendChild(btn);
+    list.appendChild(card);
+  });
+}
+
+// ── TEAM / BOARD RENDER ──────────────────────────────
+function renderTeam() {
+  renderBoard();
+  renderRosterList();
+  renderSynBadges();
+}
+
+function renderBoard() {
+  const grid=$('board-grid'); if(!grid) return;
+  grid.innerHTML='';
+  const board=G.board||Array(6).fill(null);
+  const filled=board.filter(Boolean).length;
+  $('board-count').textContent=filled+'/6';
+
+  for(let i=0;i<6;i++){
+    const charId=board[i];
+    const char=charId?ROSTER.find(c=>c.id===charId):null;
+    const slot=document.createElement('div');
+    slot.style.cssText='border-radius:9px;border:1px dashed;padding:7px 5px;text-align:center;cursor:pointer;min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;transition:all .15s;';
+
+    if(char){
+      const rc=RARITY_CONFIG[char.rar];
+      const stars=getCharStars(char.id);
+      const cls=CLASSES[char.cls];
+      const ele=ELEMENTS[char.ele];
+      slot.style.borderColor=rc.color;
+      slot.style.background='rgba('+hexToRgb(rc.color)+',.08)';
+      slot.innerHTML=
+        '<div style="font-size:1.4rem">'+char.icon+'</div>'+
+        '<div style="font-size:.56rem;font-weight:700;color:'+rc.color+';margin-top:2px">'+char.name+'</div>'+
+        '<div style="font-size:.48rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
+        '<div style="font-size:.5rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>';
+      slot.title=char.name+' — 点击移除';
+      slot.onclick=()=>removeFromBoard(i);
+    } else {
+      slot.style.borderColor='var(--bd2)';
+      slot.style.color='var(--tx3)';
+      slot.innerHTML='<div style="font-size:1.2rem;opacity:.3">+</div><div style="font-size:.48rem;margin-top:2px">空槽</div>';
+      slot.onclick=()=>{ notif('从背包选择角色上阵'); };
+    }
+    grid.appendChild(slot);
+  }
+}
+
+function renderRosterList() {
+  const list=$('roster-list'); if(!list) return;
+  list.innerHTML='';
+  const inv=G.rosterInventory||[];
+  // Get unique chars + count
+  const charMap={};
+  inv.forEach(id=>{ charMap[id]=(charMap[id]||0)+1; });
+  const chars=Object.keys(charMap).map(id=>({ ...ROSTER.find(c=>c.id===id), count:charMap[id] })).filter(c=>c.id);
+  // Sort by rarity desc
+  chars.sort((a,b)=>b.rar-a.rar);
+  $('roster-count').textContent=chars.length;
+
+  if(!chars.length){
+    const empty=document.createElement('div');
+    empty.style.cssText='grid-column:1/-1;font-size:.6rem;color:var(--tx3);font-style:italic;padding:10px;text-align:center;';
+    empty.textContent='去抽卡获得角色';
+    list.appendChild(empty); return;
+  }
+
+  chars.forEach(char=>{
+    const rc=RARITY_CONFIG[char.rar];
+    const cls=CLASSES[char.cls];
+    const ele=ELEMENTS[char.ele];
+    const stars=getCharStars(char.id);
+    const onBoard=(G.board||[]).includes(char.id);
+    const card=document.createElement('div');
+    card.style.cssText='border-radius:8px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+';padding:7px 5px;text-align:center;cursor:pointer;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.12)':'var(--s1)')+';transition:all .15s;position:relative;';
+    card.innerHTML=
+      '<div style="font-size:1.2rem">'+char.icon+'</div>'+
+      '<div style="font-size:.52rem;font-weight:700;color:'+rc.color+';margin-top:2px;line-height:1.2">'+char.name+'</div>'+
+      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+cls.name+' '+ele.icon+ele.name+'</div>'+
+      '<div style="font-size:.48rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>'+
+      (char.count>1?'<div style="position:absolute;top:3px;right:4px;font-size:.44rem;color:var(--tx3)">×'+char.count+'</div>':'')+
+      (onBoard?'<div style="font-size:.44rem;color:var(--jade2);margin-top:2px">出战中</div>':'');
+    card.onclick=()=>onBoard?removeCharFromBoard(char.id):addToBoard(char.id);
+    card.title=char.passive;
+    list.appendChild(card);
+  });
+}
+
+function renderSynBadges() {
+  const tags=$('syn-tags'); if(!tags) return;
+  tags.innerHTML='';
+  const syns=G._activeSynList||[];
+  if(!syns.length){
+    tags.innerHTML='<span style="font-size:.5rem;color:var(--tx3);font-style:italic">摆放角色以激活羁绊</span>';
+    return;
+  }
+  syns.forEach(syn=>{
+    const b=document.createElement('div');
+    b.style.cssText='font-size:.5rem;padding:2px 6px;border-radius:4px;border:1px solid var(--bd2);background:var(--s2);color:var(--gold2);white-space:nowrap;';
+    b.textContent=syn.icon+' '+syn.name;
+    b.title=syn.desc;
+    tags.appendChild(b);
+  });
+  // Show class/element counts
+  const counts=document.createElement('div');
+  counts.style.cssText='display:flex;flex-wrap:wrap;gap:3px;margin-top:2px;';
+  const cc=G._clsCounts||{}, ec=G._eleCounts||{};
+  Object.entries(cc).forEach(([cls,n])=>{
+    const d=CLASSES[cls]; if(!d) return;
+    const sp=document.createElement('span');
+    sp.style.cssText='font-size:.46rem;color:var(--tx3);';
+    sp.textContent=d.icon+'×'+n;
+    counts.appendChild(sp);
+  });
+  Object.entries(ec).forEach(([ele,n])=>{
+    const d=ELEMENTS[ele]; if(!d) return;
+    const sp=document.createElement('span');
+    sp.style.cssText='font-size:.46rem;color:var(--tx3);';
+    sp.textContent=d.icon+'×'+n;
+    counts.appendChild(sp);
+  });
+  tags.appendChild(counts);
+}
+
+function addToBoard(charId) {
+  if(!G.board) G.board=Array(6).fill(null);
+  const emptyIdx=G.board.indexOf(null);
+  if(emptyIdx===-1){ notif('阵容已满 (6/6)，先移除一名角色'); return; }
+  if(G.board.includes(charId)){ notif('该角色已在阵容中'); return; }
+  G.board[emptyIdx]=charId;
+  if(typeof calcBoardSynergies==='function') calcBoardSynergies();
+  updateStats(); saveGame(); renderTeam();
+  const c=ROSTER.find(x=>x.id===charId);
+  if(c) notif(c.icon+' '+c.name+' 上阵！');
+}
+
+function removeFromBoard(slotIdx) {
+  if(!G.board) return;
+  const charId=G.board[slotIdx]; if(!charId) return;
+  G.board[slotIdx]=null;
+  if(typeof calcBoardSynergies==='function') calcBoardSynergies();
+  updateStats(); saveGame(); renderTeam();
+  const c=ROSTER.find(x=>x.id===charId);
+  if(c) notif(c.icon+' '+c.name+' 下场');
+}
+
+function removeCharFromBoard(charId) {
+  if(!G.board) return;
+  const idx=G.board.indexOf(charId);
+  if(idx>=0) removeFromBoard(idx);
+}
+
+function hexToRgb(hex) {
+  const r=parseInt(hex.slice(1,3),16);
+  const g=parseInt(hex.slice(3,5),16);
+  const b=parseInt(hex.slice(5,7),16);
+  return r+','+g+','+b;
+}
+
 
 // ── UNIT GEAR MODAL ──────────────────────────────────
 function openUnitGearModal(unit, slot) {
