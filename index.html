@@ -1339,11 +1339,11 @@ function renderRosterList() {
   const list=$('roster-list'); if(!list) return;
   list.innerHTML='';
   const inv=G.rosterInventory||[];
-  // Get unique chars + count
   const charMap={};
   inv.forEach(id=>{ charMap[id]=(charMap[id]||0)+1; });
-  const chars=Object.keys(charMap).map(id=>({ ...ROSTER.find(c=>c.id===id), count:charMap[id] })).filter(c=>c.id);
-  // Sort by rarity desc
+  const chars=Object.keys(charMap).map(id=>({
+    ...ROSTER.find(c=>c.id===id), count:charMap[id]
+  })).filter(c=>c.id);
   chars.sort((a,b)=>b.rar-a.rar);
   $('roster-count').textContent=chars.length;
 
@@ -1360,35 +1360,164 @@ function renderRosterList() {
     const ele=ELEMENTS[char.ele];
     const stars=getCharStars(char.id);
     const onBoard=(G.board||[]).includes(char.id);
-    const cl=typeof getCharLevel==='function'?getCharLevel(char.id):{lv:1};
-    const rarMult={1:1,2:1.5,3:2.5,4:5,5:10}[char.rar]||1;
-    const trainCostVal=Math.floor(100*cl.lv*rarMult);
-    const canTrain=G.gold>=trainCostVal&&cl.lv<100;
+    const cl=getCharLevel(char.id);
+
     const card=document.createElement('div');
-    card.style.cssText='border-radius:8px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+';padding:7px 5px;text-align:center;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.12)':'var(--s1)')+';transition:all .15s;position:relative;';
-    // Icon + name
-    const topDiv=document.createElement('div');
-    topDiv.style.cssText='cursor:pointer;';
-    topDiv.innerHTML=
-      '<div style="font-size:1.2rem">'+char.icon+'</div>'+
-      '<div style="font-size:.52rem;font-weight:700;color:'+rc.color+';margin-top:2px;line-height:1.2">'+char.name+'</div>'+
-      '<div style="font-size:.46rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
-      '<div style="font-size:.46rem;color:'+rc.color+';margin-top:1px">'+'★'.repeat(stars)+'</div>'+
-      '<div style="font-size:.5rem;color:var(--jade2);margin-top:2px">Lv.'+cl.lv+'</div>'+
-      (onBoard?'<div style="font-size:.42rem;color:var(--jade2)">出战中</div>':'<div style="font-size:.42rem;color:var(--tx3)">点击上阵</div>')+
-      (char.count>1?'<div style="position:absolute;top:3px;right:4px;font-size:.42rem;color:var(--tx3)">×'+char.count+'</div>':'');
-    topDiv.onclick=()=>onBoard?removeCharFromBoard(char.id):addToBoard(char.id);
-    topDiv.title=char.passive;
-    card.appendChild(topDiv);
-    // Train button
-    const trainBtn=document.createElement('button');
-    trainBtn.style.cssText='width:100%;margin-top:4px;padding:4px;border-radius:5px;border:1px solid '+(canTrain?'rgba(201,168,76,.5)':'var(--bd2)')+';background:'+(canTrain?'rgba(201,168,76,.08)':'rgba(50,50,70,.3)')+';color:'+(canTrain?'var(--gold2)':'var(--tx3)')+';font-size:.42rem;cursor:'+(canTrain?'pointer':'not-allowed')+';';
-    trainBtn.textContent=cl.lv>=100?'满级':'训练 '+fmt(trainCostVal)+'金';
-    trainBtn.onclick=(e)=>{ e.stopPropagation(); if(canTrain) trainChar(char.id); };
-    card.appendChild(trainBtn);
+    card.style.cssText='border-radius:9px;border:1px solid '+(onBoard?rc.color:'var(--bd2)')+
+      ';padding:8px 6px;text-align:center;cursor:pointer;background:'+(onBoard?'rgba('+hexToRgb(rc.color)+',.1)':'var(--s1)')+
+      ';transition:all .15s;position:relative;';
+    card.innerHTML=
+      '<div style="font-size:1.3rem">'+char.icon+'</div>'+
+      '<div style="font-size:.54rem;font-weight:700;color:'+rc.color+';margin-top:2px;line-height:1.2">'+char.name+'</div>'+
+      '<div style="font-size:.44rem;color:var(--tx3);margin-top:1px">'+cls.icon+' '+ele.icon+'</div>'+
+      '<div style="font-size:.46rem;color:'+rc.color+';">'+'★'.repeat(stars)+'</div>'+
+      '<div style="font-size:.5rem;color:var(--jade2);margin-top:2px;font-weight:700">Lv.'+cl.lv+'</div>'+
+      (onBoard?'<div style="font-size:.4rem;color:var(--jade2);margin-top:1px">出战中</div>':'')+
+      (char.count>1?'<div style="position:absolute;top:3px;right:5px;font-size:.42rem;color:var(--tx3)">×'+char.count+'</div>':'');
+
+    // Click → open char detail modal
+    card.onclick=()=>openCharDetail(char.id);
     list.appendChild(card);
   });
 }
+
+// ── CHARACTER DETAIL MODAL ─────────────────────────────
+function openCharDetail(charId) {
+  const char=ROSTER.find(c=>c.id===charId); if(!char) return;
+  const rc=RARITY_CONFIG[char.rar];
+  const cls=CLASSES[char.cls];
+  const ele=ELEMENTS[char.ele];
+  const stars=getCharStars(charId);
+  const cl=getCharLevel(charId);
+  const onBoard=(G.board||[]).includes(charId);
+
+  // Calc level-up cost
+  const rarMult={1:1,2:1.5,3:2.5,4:5,5:10}[char.rar]||1;
+  const lvUpCost=(lv)=>Math.floor(100*lv*rarMult);
+  const canLvUp=cl.lv<100&&G.gold>=lvUpCost(cl.lv);
+
+  // ATK contribution
+  const atkContrib=typeof charAtkContrib==='function'?charAtkContrib(charId):0;
+
+  // Build modal body as DOM
+  const body=document.createElement('div');
+  body.style.cssText='padding:4px 0;';
+
+  // Header info
+  body.innerHTML=`
+    <div style="text-align:center;margin-bottom:10px">
+      <div style="font-size:2rem">${char.icon}</div>
+      <div style="font-size:.65rem;font-weight:700;color:${rc.color};margin-top:4px">${char.name}</div>
+      <div style="font-size:.5rem;color:var(--tx3);margin-top:2px">${cls.icon}${cls.name} · ${ele.icon}${ele.name} · ${'★'.repeat(stars)}</div>
+      <div style="font-size:.5rem;color:var(--tx3);margin-top:2px;font-style:italic">${char.passive}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px;font-size:.54rem;">
+      <div style="background:var(--s2);border-radius:7px;padding:8px;text-align:center">
+        <div style="color:var(--tx3);font-size:.44rem">等级</div>
+        <div style="color:var(--gold);font-weight:700;font-size:.9rem">${cl.lv}</div>
+        <div style="color:var(--tx3);font-size:.42rem">/ 100</div>
+      </div>
+      <div style="background:var(--s2);border-radius:7px;padding:8px;text-align:center">
+        <div style="color:var(--tx3);font-size:.44rem">ATK贡献</div>
+        <div style="color:var(--jade2);font-weight:700;font-size:.9rem">${fmt(atkContrib)}</div>
+        <div style="color:var(--tx3);font-size:.42rem">当前</div>
+      </div>
+    </div>
+
+    <div style="background:var(--s2);border-radius:7px;padding:8px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">
+        <span style="font-size:.5rem;color:var(--tx3)">经验条</span>
+        <span style="font-size:.5rem;color:var(--gold)">Lv.${cl.lv} → ${cl.lv>=100?'满级':'Lv.'+(cl.lv+1)}</span>
+      </div>
+      <div style="background:var(--bd2);border-radius:4px;height:6px;overflow:hidden">
+        <div style="height:100%;background:linear-gradient(90deg,var(--gold),var(--gold2));border-radius:4px;width:${Math.min(100,(cl.lv%10)*10)}%"></div>
+      </div>
+    </div>`;
+
+  // Level up cost section
+  const costDiv=document.createElement('div');
+  costDiv.style.cssText='background:var(--s2);border-radius:7px;padding:8px;margin-bottom:8px;';
+  costDiv.innerHTML=`
+    <div style="font-size:.5rem;color:var(--tx3);margin-bottom:6px">升级费用</div>
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:.58rem;color:${canLvUp?'var(--gold)':'var(--tx3)'}">💰 ${fmt(lvUpCost(cl.lv))} 金币</span>
+      <span style="font-size:.52rem;color:var(--tx3)">余额: ${fmt(G.gold)}</span>
+    </div>`;
+  body.appendChild(costDiv);
+
+  // Lv up × 1/10 buttons
+  const btnRow=document.createElement('div');
+  btnRow.style.cssText='display:flex;gap:5px;margin-bottom:8px;';
+
+  [['升1级',1],['升5级',5],['升10级',10]].forEach(([label,n])=>{
+    const b=document.createElement('button');
+    // Total cost for n levels
+    let totalCost=0; for(let i=0;i<n;i++) totalCost+=lvUpCost(cl.lv+i);
+    const canAfford=cl.lv+n<=100&&G.gold>=totalCost;
+    b.style.cssText='flex:1;padding:8px 4px;border-radius:7px;font-size:.52rem;cursor:'+(canAfford?'pointer':'not-allowed')+
+      ';border:1px solid '+(canAfford?'var(--gold)':'var(--bd2)')+
+      ';background:'+(canAfford?'rgba(201,168,76,.1)':'rgba(50,50,70,.2)')+
+      ';color:'+(canAfford?'var(--gold2)':'var(--tx3)')+';';
+    b.innerHTML=label+'<br><span style="font-size:.44rem">'+fmt(totalCost)+'金</span>';
+    b.onclick=()=>{
+      let leveled=0;
+      for(let i=0;i<n;i++){
+        const cl2=getCharLevel(charId);
+        const cost=lvUpCost(cl2.lv);
+        if(cl2.lv>=100||G.gold<cost) break;
+        G.gold-=cost; cl2.lv++; leveled++;
+        if(typeof gainExp==='function') gainExp(cl2.lv*5);
+      }
+      if(leveled>0){ updateStats(); saveGame(); openCharDetail(charId); }
+      else notif('金币不足');
+    };
+    btnRow.appendChild(b);
+  });
+  body.appendChild(btnRow);
+
+  // Reset button
+  const resetDiv=document.createElement('div');
+  resetDiv.style.cssText='border-top:1px solid var(--bd2);padding-top:8px;';
+  const totalInvested=(()=>{ let t=0; for(let i=1;i<cl.lv;i++) t+=lvUpCost(i); return t; })();
+  const refund=Math.floor(totalInvested*0.8);
+  resetDiv.innerHTML=`<div style="font-size:.5rem;color:var(--tx3);margin-bottom:5px">重置等级 → Lv.1，返还 <span style="color:var(--gold)">${fmt(refund)}</span> 金币 (80%)</div>`;
+  const resetBtn=document.createElement('button');
+  resetBtn.style.cssText='width:100%;padding:7px;border-radius:7px;border:1px solid rgba(212,82,42,.4);background:rgba(212,82,42,.08);color:#f07040;font-size:.52rem;cursor:'+(cl.lv>1?'pointer':'not-allowed')+';';
+  resetBtn.textContent=cl.lv>1?'重置等级 (返还80%金币)':'已是 Lv.1';
+  resetBtn.onclick=()=>{
+    if(cl.lv<=1){ notif('已是Lv.1'); return; }
+    if(!confirm('确定重置 '+char.name+' 的等级？将返还 '+fmt(refund)+' 金币')) return;
+    G.gold+=refund;
+    getCharLevel(charId).lv=1;
+    updateStats(); saveGame();
+    openCharDetail(charId);
+    notif(char.icon+' '+char.name+' 等级已重置');
+  };
+  resetDiv.appendChild(resetBtn);
+  body.appendChild(resetDiv);
+
+  // On/off board button
+  const boardBtn=document.createElement('button');
+  boardBtn.style.cssText='width:100%;margin-top:8px;padding:9px;border-radius:7px;font-size:.56rem;cursor:pointer;border:1px solid '+(onBoard?'rgba(212,82,42,.5)':'var(--jade)')+';background:'+(onBoard?'rgba(212,82,42,.08)':'rgba(58,158,110,.1)')+';color:'+(onBoard?'#f07040':'var(--jade2)')+';';
+  boardBtn.textContent=onBoard?'⬇ 移出阵容':'⬆ 上阵';
+  boardBtn.onclick=()=>{
+    if(onBoard) removeCharFromBoard(charId);
+    else addToBoard(charId);
+    closeModal();
+    renderTeam();
+  };
+  body.appendChild(boardBtn);
+
+  // Show modal
+  $('m-title').innerHTML='<span style="color:'+rc.color+'">'+char.icon+' '+char.name+'</span>';
+  $('m-body').innerHTML='';
+  $('m-body').appendChild(body);
+  $('m-extra').innerHTML='';
+  $('m-btns').innerHTML='<button class="m-btn m-ok" onclick="closeModal();renderTeam()">关闭</button>';
+  $('overlay').classList.add('on');
+}
+
 
 function renderSynBadges() {
   const tags=$('syn-tags'); if(!tags) return;

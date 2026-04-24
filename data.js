@@ -1948,7 +1948,9 @@ function getCharStars(charId) {
 // Get character level data (stored in G.charLevels)
 function getCharLevel(charId) {
   if(!G.charLevels) G.charLevels={};
-  if(!G.charLevels[charId]) G.charLevels[charId]={ lv:1, exp:0 };
+  if(!G.charLevels[charId]||typeof G.charLevels[charId].lv!=='number'){
+    G.charLevels[charId]={ lv:1, exp:0 };
+  }
   return G.charLevels[charId];
 }
 
@@ -1982,9 +1984,10 @@ function charAtkContrib(charId) {
   const cl=getCharLevel(charId);
   const stars=getCharStars(charId);
   const starMult=stars>=3?4:stars>=2?2:1;
-  // ATK scales: baseAtk * level * starMult * rarity
   const rarMult={1:.5,2:1,3:2,4:4,5:8}[char.rar]||1;
-  return Math.floor(char.baseAtk * cl.lv * starMult * rarMult * 100);
+  // Scale with main char ATK so board is always relevant
+  const mainAtk=typeof totalAtk==='function'?totalAtk():G.atk||10;
+  return Math.floor(mainAtk * char.baseAtk * (cl.lv/10) * starMult * rarMult * 0.1);
 }
 
 // Total ATK bonus from all board characters
