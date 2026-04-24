@@ -426,6 +426,20 @@
         <div class="panel-title">个人最佳记录</div>
         <div id="personal-bests-list"></div>
       </div>
+      <!-- Code Redemption -->
+      <div class="panel" style="margin-bottom:7px">
+        <div class="panel-title">兑换码</div>
+        <div style="display:flex;gap:6px;margin-bottom:6px;">
+          <input id="redeem-input" type="text" placeholder="输入兑换码"
+            style="flex:1;background:#0e0e1a;border:1px solid #2a2a45;border-radius:6px;padding:8px 10px;color:#d4d4e8;font-family:'JetBrains Mono',monospace;font-size:.65rem;outline:none;"
+            onkeydown="if(event.key==='Enter') redeemCode()">
+          <button onclick="redeemCode()"
+            style="padding:8px 14px;background:rgba(201,168,76,.1);border:1px solid var(--gold);border-radius:6px;color:var(--gold2);font-size:.62rem;cursor:pointer;white-space:nowrap;">
+            兑换
+          </button>
+        </div>
+        <div id="redeem-msg" style="font-size:.55rem;color:var(--jade2);min-height:16px;"></div>
+      </div>
       <!-- Save/Reset -->
       <div class="panel" style="margin-bottom:7px">
         <div class="panel-title">存档</div>
@@ -1836,6 +1850,77 @@ function doLogout() {
   document.getElementById('login-error').textContent='';
   showLogin();
 }
+
+// ── REDEEM CODES ──────────────────────────────────────
+const REDEEM_CODES = {
+  // Dev code: 9,999,999,999 crystals, 99B gold, everything x10000 vs dev account
+  'CHRONICLE-OMEGA-9999': {
+    used: false,
+    label: 'OMEGA礼包',
+    rewards: {
+      gachaCrystals: 9999999999,
+      gold: 99999999999,
+      atk_stone: 999999999,
+      spd_stone: 999999999,
+      crit_stone: 999999999,
+      def_stone: 999999999,
+      boss_core: 999999999,
+      mythic_shard: 99999999,
+      allRoster: true,
+    }
+  },
+  // Smaller starter code
+  'CHRONICLE-START': {
+    used: false,
+    label: '新手礼包',
+    rewards: {
+      gachaCrystals: 1600,
+      gold: 50000,
+    }
+  },
+};
+
+function redeemCode() {
+  const input = document.getElementById('redeem-input');
+  const msg = document.getElementById('redeem-msg');
+  if(!input || !msg) return;
+  const code = input.value.trim().toUpperCase();
+  if(!code){ msg.style.color='#f07040'; msg.textContent='请输入兑换码'; return; }
+
+  // Check used codes in save
+  if(!G.usedCodes) G.usedCodes = {};
+  if(G.usedCodes[code]){ msg.style.color='#f07040'; msg.textContent='此码已使用过'; return; }
+
+  const entry = REDEEM_CODES[code];
+  if(!entry){ msg.style.color='#f07040'; msg.textContent='无效兑换码'; return; }
+
+  // Apply rewards
+  const r = entry.rewards;
+  if(r.gachaCrystals) G.gachaCrystals = (G.gachaCrystals||0) + r.gachaCrystals;
+  if(r.gold) G.gold = (G.gold||0) + r.gold;
+  if(r.atk_stone)    G.upgMats.atk_stone  = (G.upgMats.atk_stone||0)  + r.atk_stone;
+  if(r.spd_stone)    G.upgMats.spd_stone  = (G.upgMats.spd_stone||0)  + r.spd_stone;
+  if(r.crit_stone)   G.upgMats.crit_stone = (G.upgMats.crit_stone||0) + r.crit_stone;
+  if(r.def_stone)    G.upgMats.def_stone  = (G.upgMats.def_stone||0)  + r.def_stone;
+  if(r.boss_core)    G.upgMats.boss_core  = (G.upgMats.boss_core||0)  + r.boss_core;
+  if(r.mythic_shard) G.upgMats.mythic_shard = (G.upgMats.mythic_shard||0) + r.mythic_shard;
+  if(r.allRoster && typeof ROSTER!=='undefined'){
+    if(!G.rosterInventory) G.rosterInventory=[];
+    ROSTER.forEach(c=>{ G.rosterInventory.push(c.id); });
+  }
+
+  G.usedCodes[code] = true;
+  input.value = '';
+  msg.style.color = '#60d4a0';
+  msg.textContent = '✅ ' + entry.label + ' 兑换成功！';
+  updateStats(); saveGame();
+  log('🎁 兑换码 ['+code+'] 已激活：'+entry.label, 'boss');
+  setTimeout(()=>{ if(msg) msg.textContent=''; }, 4000);
+}
+
+// ── DEV ACCOUNTS ──────────────────────────────────────
+
+function pullRosterAndShow(multi) { pullAndShow('roster', multi); }
 
 window.addEventListener('load', ()=>{
   if(!G.startTime) G.startTime=Date.now();

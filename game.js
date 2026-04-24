@@ -374,6 +374,8 @@ function loadGame() {
     if(!G.upgradeCount) G.upgradeCount=0;
     if(!G.dungeonsDone) G.dungeonsDone={};
     if(!G.challengesBest) G.challengesBest={};
+    if(!G.usedCodes) G.usedCodes={};
+    if(!G.charLevels) G.charLevels={};
     G._fighting = false;
     // Critical: ensure G.pb always exists with all required fields
     if(!G.pb) G.pb={};
