@@ -1469,8 +1469,11 @@ function openCharDetail(charId) {
         G.gold-=cost; cl2.lv++; leveled++;
         if(typeof gainExp==='function') gainExp(cl2.lv*5);
       }
-      if(leveled>0){ updateStats(); saveGame(); openCharDetail(charId); }
-      else notif('金币不足');
+      if(leveled>0){
+        updateStats(); saveGame();
+        closeModal();
+        setTimeout(()=>openCharDetail(charId), 50);
+      } else notif('金币不足');
     };
     btnRow.appendChild(b);
   });
@@ -1487,12 +1490,13 @@ function openCharDetail(charId) {
   resetBtn.textContent=cl.lv>1?'重置等级 (返还80%金币)':'已是 Lv.1';
   resetBtn.onclick=()=>{
     if(cl.lv<=1){ notif('已是Lv.1'); return; }
-    if(!confirm('确定重置 '+char.name+' 的等级？将返还 '+fmt(refund)+' 金币')) return;
+    // No confirm() - just reset directly
     G.gold+=refund;
     getCharLevel(charId).lv=1;
     updateStats(); saveGame();
-    openCharDetail(charId);
-    notif(char.icon+' '+char.name+' 等级已重置');
+    closeModal();
+    setTimeout(()=>openCharDetail(charId), 50);
+    notif(char.icon+' '+char.name+' 等级已重置，返还'+fmt(refund)+'金');
   };
   resetDiv.appendChild(resetBtn);
   body.appendChild(resetDiv);

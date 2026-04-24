@@ -1985,9 +1985,9 @@ function charAtkContrib(charId) {
   const stars=getCharStars(charId);
   const starMult=stars>=3?4:stars>=2?2:1;
   const rarMult={1:.5,2:1,3:2,4:4,5:8}[char.rar]||1;
-  // Scale with main char ATK so board is always relevant
-  const mainAtk=typeof totalAtk==='function'?totalAtk():G.atk||10;
-  return Math.floor(mainAtk * char.baseAtk * (cl.lv/10) * starMult * rarMult * 0.1);
+  // Use G.atk directly - do NOT call totalAtk() to avoid circular dependency
+  const baseAtk=G.atk||10;
+  return Math.floor(baseAtk * char.baseAtk * (cl.lv/10) * starMult * rarMult * 0.1);
 }
 
 // Total ATK bonus from all board characters
